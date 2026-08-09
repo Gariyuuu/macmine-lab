@@ -54,6 +54,9 @@ export function TopBar({
           <Link href="/p2pool" className="hover:text-zinc-200">
             P2Pool
           </Link>
+          <Link href="/changelog" className="hover:text-zinc-200">
+            Changelog
+          </Link>
           <Link href="/earnings" className="hover:text-zinc-200">
             Earnings
           </Link>
