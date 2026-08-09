@@ -5,6 +5,8 @@ Silicon Macs. Built to learn how proof-of-work mining actually works, watch
 real hashing happen on your own hardware, and — eventually — earn your
 first few cents of real cryptocurrency.
 
+Source: [github.com/Gariyuuu/macmine-lab](https://github.com/Gariyuuu/macmine-lab)
+
 ## What this is
 
 - A CLI and a local dashboard that run the real [XMRig](https://xmrig.com)
