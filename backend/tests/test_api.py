@@ -10,6 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from macmine_lab import api, db, paths
+from macmine_lab.network import NetworkSnapshot
+from macmine_lab.price import PriceSnapshot
 
 
 @pytest.fixture
@@ -264,3 +266,71 @@ def test_mining_history_empty(client):
 def test_mining_session_404_when_missing(client):
     resp = client.get("/api/mining/9999")
     assert resp.status_code == 404
+
+
+# --- Economics / First Penny --------------------------------------------
+
+_FAKE_NETWORK = NetworkSnapshot(
+    difficulty=1e11, network_hash_rate=1_000_000.0, block_reward_xmr=0.6,
+    block_time_s=120.0, height=3_000_000, source="test", fetched_at="2026-01-01T00:00:00+00:00",
+)
+_FAKE_PRICE = PriceSnapshot(price_usd=100.0, source="test", fetched_at="2026-01-01T00:00:00+00:00")
+
+
+def test_price_endpoint_503_when_unavailable(client):
+    with patch.object(api.price._default_provider, "fetch", return_value=None):
+        resp = client.get("/api/economics/price")
+    assert resp.status_code == 503
+
+
+def test_price_endpoint_returns_real_shape_when_available(client):
+    with patch.object(api.price._default_provider, "fetch", return_value=_FAKE_PRICE):
+        resp = client.get("/api/economics/price")
+    assert resp.status_code == 200
+    assert resp.json()["price_usd"] == 100.0
+
+
+def test_network_endpoint_503_when_unavailable(client):
+    with patch.object(api.network._default_provider, "fetch", return_value=None):
+        resp = client.get("/api/economics/network")
+    assert resp.status_code == 503
+
+
+def test_economics_settings_roundtrip(client):
+    resp = client.post(
+        "/api/economics/settings",
+        json={"electricity_rate_usd_per_kwh": 0.18, "power_draw_watts": 45.0},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"electricity_rate_usd_per_kwh": 0.18, "power_draw_watts": 45.0}
+
+    resp2 = client.get("/api/economics/settings")
+    assert resp2.json() == {"electricity_rate_usd_per_kwh": 0.18, "power_draw_watts": 45.0}
+
+
+def test_estimate_endpoint_503_when_data_unavailable(client):
+    with patch.object(api.network._default_provider, "fetch", return_value=None), \
+         patch.object(api.price._default_provider, "fetch", return_value=None):
+        resp = client.get("/api/economics/estimate", params={"hashrate_hs": 1000})
+    assert resp.status_code == 503
+
+
+def test_estimate_endpoint_computes_real_math(client):
+    with patch.object(api.network._default_provider, "fetch", return_value=_FAKE_NETWORK), \
+         patch.object(api.price._default_provider, "fetch", return_value=_FAKE_PRICE):
+        resp = client.get("/api/economics/estimate", params={"hashrate_hs": 1000})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert round(body["xmr_per_day"], 3) == 0.432
+    assert round(body["usd_per_day"], 2) == 43.2
+
+
+def test_first_penny_empty_state(client):
+    with patch.object(api.network._default_provider, "fetch", return_value=_FAKE_NETWORK), \
+         patch.object(api.price._default_provider, "fetch", return_value=_FAKE_PRICE):
+        resp = client.get("/api/first-penny")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["estimated_usd_total"] == 0.0
+    assert len(body["achievements"]) == 10
+    assert all(not a["unlocked"] for a in body["achievements"])

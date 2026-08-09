@@ -1,6 +1,6 @@
 [project]
 name = "macmine-lab"
-version = "0.4.0"
+version = "0.5.0"
 description = "Local Apple Silicon RandomX/Monero mining laboratory — educational, transparent, local-only."
 requires-python = ">=3.11"
 dependencies = [

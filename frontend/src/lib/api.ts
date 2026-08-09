@@ -204,6 +204,70 @@ export interface MiningHistoryEntry {
   stopped_reason: string | null;
 }
 
+export interface PriceSnapshot {
+  price_usd: number;
+  source: string;
+  fetched_at: string;
+}
+
+export interface NetworkSnapshot {
+  difficulty: number;
+  network_hash_rate: number;
+  block_reward_xmr: number;
+  block_time_s: number;
+  height: number;
+  source: string;
+  fetched_at: string;
+}
+
+export interface EconomicsSettings {
+  electricity_rate_usd_per_kwh: number | null;
+  power_draw_watts: number | null;
+}
+
+export interface EarningsEstimate {
+  my_hashrate_hs: number;
+  network_hash_rate: number;
+  my_share_of_network: number;
+  xmr_per_hour: number;
+  xmr_per_day: number;
+  usd_per_hour: number;
+  usd_per_day: number;
+  power_draw_watts: number | null;
+  electricity_rate_usd_per_kwh: number | null;
+  electricity_cost_per_day_usd: number | null;
+  net_usd_per_day: number | null;
+  price_usd: number;
+  price_source: string;
+  price_fetched_at: string;
+  network_source: string;
+  network_fetched_at: string;
+  network_height: number;
+}
+
+export interface Achievement {
+  key: string;
+  icon: string;
+  name: string;
+  description: string;
+  unavailable?: boolean;
+  unlocked: boolean;
+  unlocked_at: string | null;
+}
+
+export interface FirstPennyState {
+  estimated_usd_total: number;
+  target_usd: number;
+  next_milestone_usd: number | null;
+  progress_to_next_milestone: number;
+  total_hashes: number;
+  total_shares_good: number;
+  total_shares_total: number;
+  total_mining_seconds: number;
+  estimate_basis: string;
+  achievements: Achievement[];
+}
+
 export interface LiveWsPayload {
   t: number;
   telemetry: SystemTelemetry;
@@ -284,4 +348,17 @@ export const api = {
   miningStop: () => apiFetch<{ stopping: boolean }>("/api/mining/stop", { method: "POST" }),
   miningLive: () => apiFetch<MiningLiveState>("/api/mining/live"),
   miningHistory: (limit = 50) => apiFetch<MiningHistoryEntry[]>(`/api/mining/history?limit=${limit}`),
+
+  price: () => apiFetch<PriceSnapshot>("/api/economics/price"),
+  network: () => apiFetch<NetworkSnapshot>("/api/economics/network"),
+  economicsSettings: () => apiFetch<EconomicsSettings>("/api/economics/settings"),
+  setEconomicsSettings: (settings: Partial<EconomicsSettings>) =>
+    apiFetch<EconomicsSettings>("/api/economics/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    }),
+  estimateEarnings: (hashrateHs: number) =>
+    apiFetch<EarningsEstimate>(`/api/economics/estimate?hashrate_hs=${hashrateHs}`),
+  firstPenny: () => apiFetch<FirstPennyState>("/api/first-penny"),
 };

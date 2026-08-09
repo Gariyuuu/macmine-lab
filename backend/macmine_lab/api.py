@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 
-from . import benchmark, db, hardware, integrity, miner, mining, paths, pools, wallet
+from . import achievements, benchmark, db, economics, hardware, integrity, miner, mining, network, paths, pools, price, wallet
 from .mining_runner import mining_runner
 from .runner import benchmark_runner
 
@@ -39,7 +39,7 @@ async def _lifespan(_app: FastAPI):
         _sampler_thread.join(timeout=2)
 
 
-app = FastAPI(title="MacMine Lab", version="0.4.0", lifespan=_lifespan)
+app = FastAPI(title="MacMine Lab", version="0.5.0", lifespan=_lifespan)
 
 # The dashboard runs on whatever localhost port Next.js picks (3000 is
 # frequently already taken by another local project) — match any local
@@ -279,6 +279,71 @@ def get_mining_session_detail(session_id: int):
     if not session:
         raise HTTPException(status_code=404, detail=f"No mining session with id {session_id}")
     return session
+
+
+class EconomicsSettingsRequest(BaseModel):
+    electricity_rate_usd_per_kwh: float | None = None
+    power_draw_watts: float | None = None
+
+
+@app.get("/api/economics/price")
+def get_price_snapshot():
+    snapshot = price.get_price()
+    if not snapshot:
+        raise HTTPException(status_code=503, detail="Price data unavailable — CoinGecko unreachable and no cache.")
+    return asdict(snapshot)
+
+
+@app.get("/api/economics/network")
+def get_network_snapshot_route():
+    snapshot = network.get_network_snapshot()
+    if not snapshot:
+        raise HTTPException(
+            status_code=503, detail="Network data unavailable — xmrchain.net unreachable and no cache."
+        )
+    return asdict(snapshot)
+
+
+@app.get("/api/economics/settings")
+def get_economics_settings():
+    rate = db.get_setting("electricity_rate_usd_per_kwh")
+    watts = db.get_setting("power_draw_watts")
+    return {
+        "electricity_rate_usd_per_kwh": float(rate) if rate is not None else None,
+        "power_draw_watts": float(watts) if watts is not None else None,
+    }
+
+
+@app.post("/api/economics/settings")
+def post_economics_settings(body: EconomicsSettingsRequest):
+    if body.electricity_rate_usd_per_kwh is not None:
+        db.set_setting("electricity_rate_usd_per_kwh", str(body.electricity_rate_usd_per_kwh))
+    if body.power_draw_watts is not None:
+        db.set_setting("power_draw_watts", str(body.power_draw_watts))
+    return get_economics_settings()
+
+
+@app.get("/api/economics/estimate")
+def get_earnings_estimate(hashrate_hs: float):
+    net = network.get_network_snapshot()
+    pr = price.get_price()
+    if not net or not pr:
+        raise HTTPException(
+            status_code=503,
+            detail="Cannot estimate earnings — price and/or network data unavailable right now.",
+        )
+    settings = get_economics_settings()
+    estimate = economics.estimate_earnings(
+        hashrate_hs, net, pr,
+        power_draw_watts=settings["power_draw_watts"],
+        electricity_rate_usd_per_kwh=settings["electricity_rate_usd_per_kwh"],
+    )
+    return asdict(estimate)
+
+
+@app.get("/api/first-penny")
+def get_first_penny():
+    return achievements.get_first_penny_state()
 
 
 @app.get("/api/logs/latest")

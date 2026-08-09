@@ -36,7 +36,7 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 4 of 7
+## Current status: Phase 5 of 7
 
 - ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
   install/verification via Homebrew, fully-offline duration-controlled
@@ -56,10 +56,15 @@ first few cents of real cryptocurrency.
   pool config, a network-reachability connection test, and a Real Mining
   panel on the dashboard showing live accepted/rejected shares. MacMine Lab
   never ships a pool preset — you add your own.
+- ✅ **Phase 5** — First Penny challenge + earnings estimates: live XMR
+  price (CoinGecko) and Monero network difficulty/hashrate (xmrchain.net),
+  an Earnings page with a real electricity-cost calculator, and a First
+  Penny page with achievements — all built on real, cached, gracefully-
+  degrading data, never fabricated numbers.
 
-**Not yet built:** First Penny tracking, live price/earnings estimates, and
-thermal/battery automation. Those are Phases 5–7. This README will be
-updated as each phase lands — see `CHANGELOG.md`.
+**Not yet built:** thermal/battery automation, the experiment journal, and
+P2Pool. Those are Phases 6–7. This README will be updated as each phase
+lands — see `CHANGELOG.md`.
 
 ## Quick start
 
@@ -124,6 +129,12 @@ POST /api/mining/stop
 GET  /api/mining/live
 GET  /api/mining/history?limit=
 GET  /api/mining/{id}
+GET  /api/economics/price             # cached CoinGecko XMR/USD, 503 if unavailable
+GET  /api/economics/network           # cached xmrchain.net difficulty/hashrate, 503 if unavailable
+GET  /api/economics/settings          # your saved electricity rate + power draw estimate
+POST /api/economics/settings          # {electricity_rate_usd_per_kwh?, power_draw_watts?}
+GET  /api/economics/estimate?hashrate_hs=
+GET  /api/first-penny                 # cumulative real stats + estimated earnings + achievements
 WS   /ws/live                         # telemetry + miner + benchmark + mining state, 1x/second
 ```
 
@@ -193,6 +204,37 @@ verified way benchmark mode does (SIGTERM → SIGKILL fallback, PID re-checked
 before signaling). Every session — pool, wallet, threads, duration, average/
 peak hashrate, and final accepted/rejected share counts — is saved to
 `mining_sessions` in SQLite, separate from benchmark history.
+
+## First Penny & Earnings (Phase 5)
+
+**`/earnings`** shows real, live data — current XMR/USD price from
+[CoinGecko](https://www.coingecko.com/en/api) and current Monero network
+difficulty/hashrate/block reward from
+[xmrchain.net](https://xmrchain.net), a community block explorer (not the
+official Monero project — disclosed on the page). Both are cached in SQLite
+(price: 5 min, network: 150s, since network stats move roughly once per
+block) so we don't hammer either API, and both show "PRICE DATA
+UNAVAILABLE" / "NETWORK DATA UNAVAILABLE" rather than a fabricated number
+if the live fetch fails and there's no usable cache. You enter your
+hashrate, an electricity rate ($/kWh), and a power-draw estimate — power
+draw is **not measured**: macOS doesn't expose real-time power draw
+without `sudo powermetrics`, which this project avoids, so it's your own
+estimate, clearly labeled as such. Every output (XMR/USD per hour/day,
+electricity cost, net) is explicitly an estimate.
+
+**`/first-penny`** tracks progress toward an estimated $0.01 from real
+mining, plus achievements. Three numbers here are **real, measured facts**:
+total hashes attempted (benchmark + mining combined), total shares actually
+accepted by a pool (mining only — benchmark mode never touches a pool), and
+total real mining time. The dollar figure is explicitly an **estimate**:
+for each finished mining session, it multiplies that session's own real
+average hashrate by its real duration, valued at *current* network
+difficulty and price (not the conditions at the time the session actually
+ran) — the page says so directly. This is never mixed with or presented as
+a pool balance or wallet balance, which MacMine Lab has no way to verify in
+this version. "First Payout" is a defined achievement that **can never
+auto-unlock** here for the same reason — it stays locked with an honest
+explanation rather than being faked.
 
 ## Benchmarking, explained
 
@@ -271,9 +313,17 @@ authenticate against — the API server only ever binds to 127.0.0.1.
 - **No accepted shares ever, log shows connection errors** — verify host/
   port/TLS match what the pool currently publishes (pools change these
   periodically); re-run the connection test after fixing.
+- **"PRICE DATA UNAVAILABLE" / "NETWORK DATA UNAVAILABLE"** — CoinGecko or
+  xmrchain.net is unreachable (or rate-limiting) and there's no cached
+  value young enough to fall back to; wait and reload, or check your
+  network connection.
+- **Estimated earnings look tiny / went negative** — that's real math, not
+  a bug: at a few kH/s your share of the ~5+ GH/s Monero network is
+  minuscule, and electricity cost can easily exceed estimated revenue at
+  home electricity rates. This is genuinely how small-scale CPU mining
+  economics look; MacMine Lab won't sugarcoat the number.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming, in order: First Penny
-tracking and live price/earnings estimates (Phase 5), thermal/battery
+See `CHANGELOG.md` for what's shipped. Upcoming, in order: thermal/battery
 automation and the experiment journal (Phase 6), then P2Pool (Phase 7).

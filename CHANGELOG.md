@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.5.0 — First Penny & Earnings (Phase 5)
+
+Live XMR price, live Monero network stats, an earnings estimator with a
+real electricity-cost calculator, and a First Penny challenge with
+achievements — all built on real, cached, gracefully-degrading external
+data, never fabricated numbers.
+
+Added:
+- `price.py`: `PriceProvider` abstraction, `CoinGeckoPriceProvider`
+  implementation, SQLite-cached (5 min TTL) with fallback to a stale cache
+  before giving up and returning `None` — never fabricates a price.
+- `network.py`: same pattern for Monero network difficulty/hashrate/block
+  reward, sourced from xmrchain.net (a community explorer, disclosed as
+  such everywhere it's shown), 150s cache TTL since network stats move
+  roughly once per block.
+- `economics.py`: pure-math earnings estimator (your hashrate x network
+  share x block reward x price, plus an optional electricity-cost/net
+  calculation from user-entered power draw and $/kWh — power draw is a
+  user estimate, not measured, since real-time power draw needs `sudo
+  powermetrics` and this project avoids sudo).
+- `achievements.py`: First Penny progress + 10 achievements, computed from
+  real measured facts (cumulative hashes, cumulative real accepted shares)
+  plus one clearly-labeled estimate (cumulative USD, computed from each
+  finished mining session's own real average hashrate x real duration,
+  valued at *current* network/price data). "First Payout" is defined but
+  can never auto-unlock — verifying a real payout needs wallet-balance
+  integration this version doesn't have, so it stays honestly locked
+  instead of being faked.
+- REST: `/api/economics/price`, `/api/economics/network` (both 503 with a
+  clear message on failure, never a fake number), `/api/economics/
+  settings`, `/api/economics/estimate`, `/api/first-penny`.
+- Frontend: `/earnings` (price + network cards, input form, computed
+  estimate) and `/first-penny` (progress bar, real-vs-estimated stat
+  boxes, achievement grid, milestone row, an expandable "how this is
+  calculated" explanation) plus a compact `FirstPennyCard` on the main
+  dashboard. Nav links added to the top bar.
+- 27 new backend tests: pure-math economics checks (including one hand-
+  computed end-to-end example verified to the cent), price/network cache
+  behavior (fresh-cache reuse, stale-cache fallback, fetch failure with no
+  cache), achievement unlock logic (including that First Payout never
+  unlocks and that unlocking is idempotent), and the new API endpoints —
+  99 total, all passing.
+
+Verified manually this phase:
+- Hit CoinGecko's public API directly with curl before writing any code —
+  confirmed live, no-auth-required XMR/USD pricing.
+- Investigated three community Monero network-data sources; xmrchain.net's
+  `/api/networkinfo` and `/api/block/<height>` both returned real live data
+  on the first real test. Found a real, reproducible edge case doing this:
+  fetching the coinbase reward for the *very newest* block occasionally
+  returned incomplete data (missing `txs`) — apparently a brief indexing
+  lag right after a new block is found. Fixed with a fallback to
+  `height - 1` and a proper `User-Agent` header. Also confirmed the current
+  Monero block reward (~0.6 XMR, the tail emission) directly from a real
+  block's coinbase output rather than trusting a memorized constant.
+- Full browser test (Playwright): loaded the dashboard, `/first-penny`,
+  and `/earnings` fresh — real live price ($381.34, CoinGecko) and real
+  live network data (height 3736264, ~5.36 GH/s) rendered correctly, the
+  Calculate button produced numbers matching hand-calculated math, and the
+  achievement grid correctly showed all 10 locked with $0 progress. Then
+  ran a real 30s benchmark, confirmed "First Hash" unlocked with the exact
+  real hash count (76,434) and the card's visual state changed from
+  locked to a green "Unlocked" badge on reload — proving the full pipeline
+  from real XMRig hashing through to the achievement UI.
+
+Not yet built: thermal/battery automation, the experiment journal, P2Pool.
+Phases 6–7.
+
 ## v0.4.0 — Real Mining (Phase 4)
 
 Real XMR pool mining: wallet configuration, pool configuration, and live

@@ -7,6 +7,7 @@ import { HashrateChart, type ChartPoint } from "@/components/HashrateChart";
 import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 import { BenchmarkControls } from "@/components/BenchmarkControls";
 import { MiningControls } from "@/components/MiningControls";
+import { FirstPennyCard } from "@/components/FirstPennyCard";
 import { LogTerminal } from "@/components/LogTerminal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLiveSocket } from "@/lib/useLiveSocket";
@@ -93,7 +94,10 @@ export default function Dashboard() {
           <MiningControls hardware={hardware} mining={mining} />
         </div>
 
-        <BenchmarkControls hardware={hardware} benchmark={benchmark} />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <FirstPennyCard />
+          <BenchmarkControls hardware={hardware} benchmark={benchmark} />
+        </div>
 
         <LogTerminal active={status !== "IDLE"} />
 

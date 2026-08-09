@@ -114,6 +114,29 @@ CREATE TABLE IF NOT EXISTS mining_sessions (
     hashrate_samples_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS price_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    price_usd REAL NOT NULL,
+    source TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS network_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    difficulty REAL NOT NULL,
+    network_hash_rate REAL NOT NULL,
+    block_reward_xmr REAL NOT NULL,
+    block_time_s REAL NOT NULL,
+    height INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS achievements (
+    key TEXT PRIMARY KEY,
+    unlocked_at TEXT NOT NULL
+);
 """
 
 
@@ -395,3 +418,74 @@ def get_mining_session(session_id: int) -> dict | None:
         d = dict(row)
         d["hashrate_samples"] = json.loads(d.pop("hashrate_samples_json"))
         return d
+
+
+def list_finished_mining_sessions() -> list[dict]:
+    """All mining sessions that have actually completed — used to compute
+    cumulative First Penny / achievement progress."""
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT id, threads, started_at, ended_at, duration_s, avg_hs, peak_hs,
+                      shares_good, shares_total, hashes_total
+               FROM mining_sessions WHERE ended_at IS NOT NULL ORDER BY id ASC"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# --- Price / network snapshots (cache for the external data providers) ----
+
+def insert_price_snapshot(price_usd: float, source: str, fetched_at: str) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO price_snapshots (price_usd, source, fetched_at) VALUES (?, ?, ?)",
+            (price_usd, source, fetched_at),
+        )
+        return cur.lastrowid
+
+
+def get_latest_price_snapshot() -> dict | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM price_snapshots ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def insert_network_snapshot(
+    difficulty: float, network_hash_rate: float, block_reward_xmr: float,
+    block_time_s: float, height: int, source: str, fetched_at: str,
+) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO network_snapshots
+               (difficulty, network_hash_rate, block_reward_xmr, block_time_s, height, source, fetched_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (difficulty, network_hash_rate, block_reward_xmr, block_time_s, height, source, fetched_at),
+        )
+        return cur.lastrowid
+
+
+def get_latest_network_snapshot() -> dict | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM network_snapshots ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+# --- Achievements ----------------------------------------------------------
+
+def unlock_achievement(key: str, unlocked_at: str) -> bool:
+    """Returns True if this call actually unlocked it (False if already unlocked)."""
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO achievements (key, unlocked_at) VALUES (?, ?)",
+            (key, unlocked_at),
+        )
+        return cur.rowcount > 0
+
+
+def list_unlocked_achievements() -> dict[str, str]:
+    with connect() as conn:
+        rows = conn.execute("SELECT key, unlocked_at FROM achievements").fetchall()
+        return {r["key"]: r["unlocked_at"] for r in rows}
