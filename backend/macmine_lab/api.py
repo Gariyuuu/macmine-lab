@@ -21,7 +21,8 @@ from pydantic import BaseModel
 
 from . import (
     achievements, analytics, benchmark, calibration, db, economics, hardware,
-    integrity, miner, mining, network, notifications, paths, pools, price, safety, wallet,
+    integrity, miner, mining, monerod, network, notifications, p2pool, paths,
+    pools, price, safety, wallet,
 )
 from .mining_runner import mining_runner
 from .runner import benchmark_runner
@@ -45,7 +46,7 @@ async def _lifespan(_app: FastAPI):
     safety_manager.stop()
 
 
-app = FastAPI(title="MacMine Lab", version="0.6.0", lifespan=_lifespan)
+app = FastAPI(title="MacMine Lab", version="0.7.0", lifespan=_lifespan)
 
 # The dashboard runs on whatever localhost port Next.js picks (3000 is
 # frequently already taken by another local project) — match any local
@@ -396,6 +397,128 @@ def get_journal(limit: int = 100):
 @app.get("/api/analytics")
 def get_analytics_route():
     return analytics.get_analytics()
+
+
+class MonerodStartRequest(BaseModel):
+    data_dir: str
+    pruned: bool = True
+    bandwidth_limit_kbps: int | None = None
+
+
+class P2PoolStartRequest(BaseModel):
+    wallet_id: int
+    mode: str = "mini"
+    data_dir: str
+    stratum_port: int = p2pool.DEFAULT_STRATUM_PORT
+    light_mode: bool = False
+
+
+@app.get("/api/p2pool/defaults")
+def get_p2pool_defaults():
+    """Real default paths/ports for the frontend to pre-fill — not magic
+    numbers baked into the UI."""
+    return {
+        "monerod_data_dir": str(paths.DEFAULT_MONEROD_DATA_DIR),
+        "monerod_rpc_port": monerod.DEFAULT_RPC_PORT,
+        "monerod_zmq_port": monerod.DEFAULT_ZMQ_PORT,
+        "monerod_p2p_port": monerod.DEFAULT_P2P_PORT,
+        "p2pool_data_dir": str(paths.DEFAULT_P2POOL_DATA_DIR),
+        "p2pool_stratum_port": p2pool.DEFAULT_STRATUM_PORT,
+    }
+
+
+@app.get("/api/p2pool/requirements")
+def get_p2pool_requirements():
+    return asdict(monerod.requirements_info())
+
+
+@app.get("/api/p2pool/monerod/integrity")
+def get_monerod_integrity():
+    return asdict(monerod.verify_installed())
+
+
+@app.post("/api/p2pool/monerod/install")
+def post_monerod_install():
+    ok, message = monerod.install_via_brew()
+    if not ok:
+        raise HTTPException(status_code=500, detail=message)
+    record = monerod.verify_installed()
+    monerod.save_integrity_record(record)
+    return {"installed": True, "message": message, "integrity": asdict(record)}
+
+
+@app.get("/api/p2pool/monerod/status")
+def get_monerod_status():
+    return asdict(monerod.get_status())
+
+
+@app.post("/api/p2pool/monerod/start")
+def post_monerod_start(body: MonerodStartRequest):
+    """This is the one action in MacMine Lab that can trigger a large,
+    long-running download (the Monero blockchain) — the frontend must show
+    the real storage/bandwidth estimate and get explicit confirmation
+    before calling this. See monerod.py's module docstring."""
+    if not monerod.find_monerod_binary():
+        raise HTTPException(status_code=409, detail="monerod is not installed — install it first.")
+    try:
+        pid = monerod.launch(body.data_dir, body.pruned, bandwidth_limit_kbps=body.bandwidth_limit_kbps)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"started": True, "pid": pid}
+
+
+@app.post("/api/p2pool/monerod/stop")
+def post_monerod_stop():
+    ok = monerod.stop()
+    if not ok:
+        raise HTTPException(status_code=500, detail="Could not confirm monerod stopped.")
+    return {"stopped": True}
+
+
+@app.get("/api/p2pool/p2pool/integrity")
+def get_p2pool_integrity():
+    return asdict(p2pool.verify_installed())
+
+
+@app.post("/api/p2pool/p2pool/install")
+def post_p2pool_install():
+    ok, message = p2pool.install()
+    if not ok:
+        raise HTTPException(status_code=500, detail=message)
+    record = p2pool.verify_installed()
+    p2pool.save_integrity_record(record)
+    return {"installed": True, "message": message, "integrity": asdict(record)}
+
+
+@app.get("/api/p2pool/p2pool/status")
+def get_p2pool_status():
+    return asdict(p2pool.get_status())
+
+
+@app.post("/api/p2pool/p2pool/start")
+def post_p2pool_start(body: P2PoolStartRequest):
+    w = db.get_wallet(body.wallet_id)
+    if not w:
+        raise HTTPException(status_code=404, detail=f"No wallet with id {body.wallet_id}")
+    if not p2pool.find_p2pool_binary():
+        raise HTTPException(status_code=409, detail="p2pool is not installed — install it first.")
+    try:
+        pid = p2pool.launch(
+            w["address"], body.mode, body.data_dir,
+            monerod.DEFAULT_RPC_PORT, monerod.DEFAULT_ZMQ_PORT,
+            stratum_port=body.stratum_port, light_mode=body.light_mode,
+        )
+    except (RuntimeError, ValueError) as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"started": True, "pid": pid, "stratum_port": body.stratum_port}
+
+
+@app.post("/api/p2pool/p2pool/stop")
+def post_p2pool_stop():
+    ok = p2pool.stop()
+    if not ok:
+        raise HTTPException(status_code=500, detail="Could not confirm p2pool stopped.")
+    return {"stopped": True}
 
 
 @app.get("/api/logs/latest")

@@ -1,5 +1,82 @@
 # Changelog
 
+## v0.7.0 — P2Pool & Decentralized Mining (Phase 7)
+
+The final planned phase: trustless, 0%-fee decentralized mining via
+[P2Pool](https://github.com/SChernykh/p2pool). MacMine Lab never
+auto-starts the one large download in the project (the Monero blockchain
+`monerod` needs to validate shares) — that requires an explicit,
+restated-cost confirmation step.
+
+Added:
+- `monerod.py`: install/verify via Homebrew's official `monero` formula
+  (~94 MB binary, safe to automate — the blockchain itself is not),
+  real sourced storage estimates (pruned ~60–120 GB, full ~190–250 GB,
+  cited sources since these numbers grow over time), process launch/stop
+  with the same PID-tracking safety pattern as XMRig, and real sync-status
+  parsing from monerod's own JSON-RPC `get_info` (height, target_height,
+  synchronized, database size, free space).
+- `p2pool.py`: no Homebrew formula exists, so this downloads the official
+  macOS ARM64 binary directly from SChernykh/p2pool's GitHub releases and
+  verifies its SHA-256 against the project's GPG-signed checksums file
+  before installing (the PGP signature itself isn't independently
+  verified — no `gpg` dependency added for this, and the integrity record
+  says so honestly). Process launch/stop, `main`/`mini`/`nano` sidechain
+  support.
+- REST: `/api/p2pool/defaults`, `/api/p2pool/requirements`,
+  `/api/p2pool/monerod/*` (integrity, install, status, start, stop),
+  `/api/p2pool/p2pool/*` (same shape).
+- Frontend `/p2pool`: requirements shown prominently before any action
+  button; a two-step confirmation flow for starting monerod's sync
+  (restates the real storage/bandwidth cost, offers a download-speed cap,
+  requires an explicit "I understand" checkbox before the Confirm button
+  enables); live real sync progress; P2Pool section with wallet/sidechain
+  selection; "Add as Mining Pool" wires the running P2Pool's local
+  Stratum server into the exact same pool list Phase 4 built — mining to
+  it needs zero new mining-specific code.
+- 39 new backend tests (180 total, all passing) — including a real
+  checksum-mismatch-rejection test and a fixture using the actual
+  sha256sums.txt.asc content fetched from the live v4.18 release.
+
+Found and fixed a real bug via actually testing this, not just writing
+it: `monerod`/`p2pool` status used the same PID+`ps` liveness check as
+XMRig's tracking, but unlike XMRig (which Phase 1's benchmark loop
+actively reaps via `proc.poll()`), nothing reaped these processes when
+they exited — a crashed process left a zombie that `ps` kept reporting as
+"running" indefinitely. Caught by actually launching P2Pool with a test
+wallet address: P2Pool does real base58-checksum validation (stricter
+than MacMine Lab's own format-only check), rejected the address, and
+exited in milliseconds — but the status endpoint kept saying "running"
+seconds later. Fixed by reaping via `os.waitpid(pid, os.WNOHANG)`, since
+these are our own child processes and reaping them is our responsibility,
+not `ps`'s. Added regression tests for both `monerod.py` and `p2pool.py`
+using a real short-lived child process to prove the fix. Also found and
+fixed a related gap while investigating: the stratum port a running
+P2Pool instance was launched with wasn't recoverable by `get_status()`
+(always returned `null`) since nothing persisted it — now written
+alongside the PID file.
+
+Verified manually this phase, in order: confirmed `monerod` installs via
+Homebrew (already the case since Monero ships an official formula) and
+inspected its real `--help` output for exact flag names before writing
+any launch code; downloaded the real P2Pool v4.18 macOS ARM64 release,
+verified its SHA-256 against the live checksums file by hand with
+`shasum`, and inspected its real `--help` output too; ran a bounded,
+rate-limited `monerod` sync for ~15 seconds (capped at 512 KB/s) to
+confirm real RPC status parsing against genuine sync data (height
+climbing from 0, `database_size` growing) before stopping it — never let
+it download more than ~30 MB; attempted a real P2Pool launch, which
+correctly rejected a synthetic test wallet address with real base58
+validation (this is how the zombie-reaping bug was found); drove the full
+`/p2pool` page in a browser, confirmed the sync-consent gate's Confirm
+button stays disabled until the checkbox is checked, and deliberately did
+**not** click through a real sync or point P2Pool at a real wallet
+address in this session, since committing this Mac's bandwidth/disk to a
+multi-day download is a decision only the user should make.
+
+All 7 phases from the original build plan are now complete. See earlier
+entries below for the full history.
+
 ## v0.6.0 — Safety Automation & Journal (Phase 6)
 
 Automated thermal/battery safety, real local notifications, an Experiment

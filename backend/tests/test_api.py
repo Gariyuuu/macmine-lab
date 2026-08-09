@@ -393,3 +393,99 @@ def test_analytics_empty(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["threads_vs_hashrate"]["available"] is False
+
+
+# --- P2Pool -----------------------------------------------------------
+
+def test_p2pool_defaults_real_shape(client):
+    resp = client.get("/api/p2pool/defaults")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["monerod_rpc_port"] == 18081
+    assert "monerod_data_dir" in body
+
+
+def test_p2pool_requirements_is_a_sourced_range(client):
+    resp = client.get("/api/p2pool/requirements")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["pruned_gb_low"] < body["pruned_gb_high"]
+    assert len(body["sources"]) >= 1
+
+
+def test_monerod_status_when_not_running(client):
+    resp = client.get("/api/p2pool/monerod/status")
+    assert resp.status_code == 200
+    assert resp.json()["running"] is False
+
+
+def test_monerod_start_rejects_when_not_installed(client):
+    with patch.object(api.monerod, "find_monerod_binary", return_value=None):
+        resp = client.post("/api/p2pool/monerod/start", json={"data_dir": "/tmp/x", "pruned": True})
+    assert resp.status_code == 409
+
+
+def test_monerod_start_invokes_launch_without_real_sync(client):
+    with patch.object(api.monerod, "find_monerod_binary", return_value="/opt/homebrew/bin/monerod"), \
+         patch.object(api.monerod, "launch", return_value=4242) as mock_launch:
+        resp = client.post(
+            "/api/p2pool/monerod/start",
+            json={"data_dir": "/tmp/macmine-test-chain", "pruned": True, "bandwidth_limit_kbps": 512},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"started": True, "pid": 4242}
+    mock_launch.assert_called_once_with("/tmp/macmine-test-chain", True, bandwidth_limit_kbps=512)
+
+
+def test_monerod_stop_when_idle_is_safe(client):
+    resp = client.post("/api/p2pool/monerod/stop")
+    assert resp.status_code == 200
+    assert resp.json() == {"stopped": True}
+
+
+def test_p2pool_status_when_not_running(client):
+    resp = client.get("/api/p2pool/p2pool/status")
+    assert resp.status_code == 200
+    assert resp.json()["running"] is False
+
+
+def test_p2pool_start_404_missing_wallet(client):
+    resp = client.post(
+        "/api/p2pool/p2pool/start",
+        json={"wallet_id": 9999, "mode": "mini", "data_dir": "/tmp/x"},
+    )
+    assert resp.status_code == 404
+
+
+def test_p2pool_start_rejects_when_not_installed(client):
+    wallet_resp = client.post("/api/wallets", json={"address": "4" + "x" * 94})
+    wallet_id = wallet_resp.json()["id"]
+    with patch.object(api.p2pool, "find_p2pool_binary", return_value=None):
+        resp = client.post(
+            "/api/p2pool/p2pool/start",
+            json={"wallet_id": wallet_id, "mode": "mini", "data_dir": "/tmp/x"},
+        )
+    assert resp.status_code == 409
+
+
+def test_p2pool_start_invokes_launch_with_resolved_wallet_address(client):
+    wallet_resp = client.post("/api/wallets", json={"address": "4" + "x" * 94})
+    wallet_id = wallet_resp.json()["id"]
+    with patch.object(api.p2pool, "find_p2pool_binary", return_value="/some/path/p2pool"), \
+         patch.object(api.p2pool, "launch", return_value=777) as mock_launch:
+        resp = client.post(
+            "/api/p2pool/p2pool/start",
+            json={"wallet_id": wallet_id, "mode": "mini", "data_dir": "/tmp/p2pool-test"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["pid"] == 777
+    mock_launch.assert_called_once()
+    call_args = mock_launch.call_args[0]
+    assert call_args[0] == "4" + "x" * 94  # resolved from wallet_id, not passed directly
+    assert call_args[1] == "mini"
+
+
+def test_p2pool_stop_when_idle_is_safe(client):
+    resp = client.post("/api/p2pool/p2pool/stop")
+    assert resp.status_code == 200
+    assert resp.json() == {"stopped": True}

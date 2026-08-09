@@ -11,4 +11,7 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+data/bin/
+data/monerod-chain/
+data/p2pool-cache/
 .DS_Store

@@ -318,6 +318,53 @@ export interface AnalyticsResponse {
   thermal_state_vs_hashrate: AnalyticsSeries;
 }
 
+export interface P2PoolDefaults {
+  monerod_data_dir: string;
+  monerod_rpc_port: number;
+  monerod_zmq_port: number;
+  monerod_p2p_port: number;
+  p2pool_data_dir: string;
+  p2pool_stratum_port: number;
+}
+
+export interface P2PoolRequirements {
+  pruned_gb_low: number;
+  pruned_gb_high: number;
+  full_gb_low: number;
+  full_gb_high: number;
+  sources: string[];
+  note: string;
+}
+
+export interface BinaryIntegrity {
+  installed: boolean;
+  binary_path: string | null;
+  version: string | null;
+  architecture: string | null;
+  sha256: string | null;
+  install_source: string;
+  upstream_project: string;
+  verification_method: string;
+  checked_at: string;
+}
+
+export interface MonerodStatus {
+  running: boolean;
+  pid: number | null;
+  height: number | null;
+  target_height: number | null;
+  synchronized: boolean | null;
+  sync_progress_percent: number | null;
+  database_size_gb: number | null;
+  free_space_gb: number | null;
+}
+
+export interface P2PoolProcessStatus {
+  running: boolean;
+  pid: number | null;
+  stratum_port: number | null;
+}
+
 export interface LiveWsPayload {
   t: number;
   telemetry: SystemTelemetry;
@@ -428,4 +475,29 @@ export const api = {
 
   journal: (limit = 100) => apiFetch<JournalResponse>(`/api/journal?limit=${limit}`),
   analytics: () => apiFetch<AnalyticsResponse>("/api/analytics"),
+
+  p2poolDefaults: () => apiFetch<P2PoolDefaults>("/api/p2pool/defaults"),
+  p2poolRequirements: () => apiFetch<P2PoolRequirements>("/api/p2pool/requirements"),
+
+  monerodIntegrity: () => apiFetch<BinaryIntegrity>("/api/p2pool/monerod/integrity"),
+  monerodInstall: () => apiFetch<{ installed: boolean; message: string }>("/api/p2pool/monerod/install", { method: "POST" }),
+  monerodStatus: () => apiFetch<MonerodStatus>("/api/p2pool/monerod/status"),
+  monerodStart: (dataDir: string, pruned: boolean, bandwidthLimitKbps: number | null) =>
+    apiFetch<{ started: boolean; pid: number }>("/api/p2pool/monerod/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data_dir: dataDir, pruned, bandwidth_limit_kbps: bandwidthLimitKbps }),
+    }),
+  monerodStop: () => apiFetch<{ stopped: boolean }>("/api/p2pool/monerod/stop", { method: "POST" }),
+
+  p2poolIntegrity: () => apiFetch<BinaryIntegrity>("/api/p2pool/p2pool/integrity"),
+  p2poolInstall: () => apiFetch<{ installed: boolean; message: string }>("/api/p2pool/p2pool/install", { method: "POST" }),
+  p2poolStatus: () => apiFetch<P2PoolProcessStatus>("/api/p2pool/p2pool/status"),
+  p2poolStart: (walletId: number, mode: "main" | "mini" | "nano", dataDir: string, stratumPort: number, lightMode: boolean) =>
+    apiFetch<{ started: boolean; pid: number; stratum_port: number }>("/api/p2pool/p2pool/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_id: walletId, mode, data_dir: dataDir, stratum_port: stratumPort, light_mode: lightMode }),
+    }),
+  p2poolStop: () => apiFetch<{ stopped: boolean }>("/api/p2pool/p2pool/stop", { method: "POST" }),
 };

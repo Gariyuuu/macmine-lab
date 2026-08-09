@@ -36,7 +36,7 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 6 of 7
+## Current status: Phase 7 of 7 — complete
 
 - ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
   install/verification via Homebrew, fully-offline duration-controlled
@@ -67,9 +67,16 @@ first few cents of real cryptocurrency.
   Analytics page (real correlations only — a chart says "not enough data
   yet" rather than faking one). Critical thermal state always stops mining
   immediately; that's a hard floor that can't be turned off.
+- ✅ **Phase 7** — P2Pool, decentralized mining: a `/p2pool` page that
+  installs and manages `monerod` (via Homebrew) and `p2pool` (downloaded
+  from GitHub releases, SHA-256 verified) as real local processes.
+  **MacMine Lab never auto-starts a blockchain sync** — the one action in
+  this whole project that can download tens of gigabytes requires an
+  explicit, informed confirmation step that restates the real storage/
+  bandwidth cost first.
 
-**Not yet built:** P2Pool. That's Phase 7. This README will be updated as each phase
-lands — see `CHANGELOG.md`.
+All 7 phases from the original build plan are now implemented. See
+`CHANGELOG.md` for the full history of what shipped in each one.
 
 ## Quick start
 
@@ -145,6 +152,18 @@ GET  /api/safety/settings
 POST /api/safety/settings             # {safety_automation_enabled?, allow_mining_on_battery?, battery_pause_threshold_percent?}
 GET  /api/journal                     # benchmark history + result labels + recommended configs
 GET  /api/analytics                   # threads/efficiency/duration/thermal correlations, real data only
+GET  /api/p2pool/defaults             # default paths/ports for the setup UI to pre-fill
+GET  /api/p2pool/requirements         # real, sourced storage estimates (pruned/full)
+GET  /api/p2pool/monerod/integrity
+POST /api/p2pool/monerod/install      # ~94MB via Homebrew, safe to automate
+GET  /api/p2pool/monerod/status       # real sync height/target/progress from monerod's own RPC
+POST /api/p2pool/monerod/start        # {data_dir, pruned, bandwidth_limit_kbps} — starts a real sync
+POST /api/p2pool/monerod/stop
+GET  /api/p2pool/p2pool/integrity
+POST /api/p2pool/p2pool/install       # ~5MB from GitHub, SHA-256 verified
+GET  /api/p2pool/p2pool/status
+POST /api/p2pool/p2pool/start         # {wallet_id, mode, data_dir, stratum_port, light_mode}
+POST /api/p2pool/p2pool/stop
 WS   /ws/live                         # telemetry + miner + benchmark + mining + safety state, 1x/second
 ```
 
@@ -214,6 +233,55 @@ verified way benchmark mode does (SIGTERM → SIGKILL fallback, PID re-checked
 before signaling). Every session — pool, wallet, threads, duration, average/
 peak hashrate, and final accepted/rejected share counts — is saved to
 `mining_sessions` in SQLite, separate from benchmark history.
+
+## P2Pool — Decentralized Mining (Phase 7)
+
+**`/p2pool`** sets up trustless, 0%-fee decentralized mining: instead of a
+pool operator, you run a local [P2Pool](https://github.com/SChernykh/p2pool)
+node that merges with a real Monero node (`monerod`) you also run.
+
+**The one large download in this whole project.** P2Pool requires a
+synced Monero node to validate shares — real, sourced estimates as of
+this writing are ~60–120 GB for a pruned node or ~190–250 GB for a full
+node (these numbers only grow over time; the page links the sources so
+you can check the current figure yourself). **MacMine Lab never starts
+this sync automatically.** The "Start Node" button reveals an explicit
+confirmation step — restating the real storage/bandwidth cost, offering a
+download-speed cap, and requiring you to check "I understand this
+downloads tens of GB and may take hours to days" — before the sync
+actually begins. Nothing else in this project needs that kind of gate;
+this is the one action that genuinely warrants it.
+
+**What's automated safely:** `monerod` itself (the ~94 MB binary, not the
+blockchain) installs via Homebrew's official `monero` formula.
+`p2pool` has no Homebrew formula, so MacMine Lab downloads the official
+macOS ARM64 binary directly from
+[SChernykh/p2pool](https://github.com/SChernykh/p2pool)'s GitHub releases
+(~5 MB) and verifies its SHA-256 against the project's GPG-signed
+checksums file before installing — both small, safe to automate without a
+separate consent step. The PGP signature itself isn't independently
+verified (no `gpg` dependency added for this); the integrity record says
+so honestly rather than overclaiming.
+
+Once both are running, P2Pool exposes a local Stratum server exactly like
+any other pool — "Add as Mining Pool" on the page adds it to the same pool
+list Phase 4 built, so mining to it works through the existing dashboard
+with zero new mining-specific code. Supports `main`, `mini`, and `nano`
+sidechains (`mini`/`nano` are p2pool's own lower-difficulty chains for
+smaller miners, and are the default here).
+
+**A real bug found by actually testing this, not just writing it:**
+`monerod`/`p2pool` process status initially used the same PID+`ps`-based
+liveness check as XMRig's tracking, but unlike XMRig (which Phase 1's
+benchmark loop actively polls via `proc.poll()`), nothing was reaping
+these processes when they exited — so a crashed process left a zombie
+that `ps` kept reporting as "running" indefinitely. Found by launching
+P2Pool with a test wallet address (P2Pool does real base58-checksum
+validation, unlike MacMine Lab's own format-only check, so it rejected
+the address and exited immediately) and watching the status endpoint keep
+saying "running" afterward. Fixed by reaping via `os.waitpid(pid,
+os.WNOHANG)` — since these are our own child processes, that's our
+responsibility, not `ps`'s.
 
 ## Safety Automation & Journal (Phase 6)
 
@@ -332,13 +400,16 @@ version — so this is auditable, not just asserted.
 
 Everything MacMine Lab writes lives under `data/` in this repo: `data/macmine.db`
 (SQLite — benchmark runs, telemetry history, miner integrity records, wallet
-addresses, pool configs, and mining sessions), `data/logs/` (raw XMRig
-output), `data/run/` (the current PID file, if anything is running),
-`data/integrity/` (a human-readable snapshot of the latest integrity check).
-Nothing is uploaded anywhere. The wallets table stores only the public
-address and an optional label — there is no column for a seed phrase or
-private key, so there's nothing sensitive of that kind to leak even
-locally. There is no authentication because there is nothing to
+addresses, pool configs, and mining sessions), `data/logs/` (raw XMRig/
+monerod/p2pool output), `data/run/` (PID files for whatever's running),
+`data/integrity/` (human-readable integrity snapshots), `data/bin/` (the
+downloaded p2pool binary), and — only if you explicitly confirm a sync —
+`data/monerod-chain/` (the Monero blockchain, tens to 100+ GB; point this
+at external storage instead if you'd rather it not live in the repo
+directory). Nothing is uploaded anywhere. The wallets table stores only
+the public address and an optional label — there is no column for a seed
+phrase or private key, so there's nothing sensitive of that kind to leak
+even locally. There is no authentication because there is nothing to
 authenticate against — the API server only ever binds to 127.0.0.1.
 
 ## Troubleshooting
@@ -389,8 +460,21 @@ authenticate against — the API server only ever binds to 127.0.0.1.
 - **Journal/Analytics show "not enough data"** — genuinely means what it
   says: run more benchmarks (varying thread counts) or let a few mining
   sessions complete. Neither page will draw a conclusion from 1 data point.
+- **P2Pool won't start / exits immediately** — check
+  `data/logs/p2pool.log`; the most common cause is an invalid wallet
+  address (P2Pool does real base58-checksum validation, stricter than
+  MacMine Lab's own format-only check) or `monerod` not reachable on the
+  expected RPC/ZMQ ports.
+- **P2Pool shows "Running" but produces no shares** — check the Monero
+  Node section's `synchronized` field; P2Pool needs a fully synced
+  `monerod` to validate shares, and sync can genuinely take hours to days.
+- **monerod won't start** — check `data/logs/monerod.log.stderr`; common
+  causes are the RPC/P2P ports already being in use, or insufficient disk
+  space at the configured data directory.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming: P2Pool / decentralized
-mining setup (Phase 7) — only after everything above has proven reliable.
+All 7 planned phases are complete — see `CHANGELOG.md` for the full
+history. Possible future directions (not committed to): a packaged .app
+build, additional coins beyond Monero, and P2Pool's `--local-api` stats
+once verified against a real running instance with a real wallet address.
