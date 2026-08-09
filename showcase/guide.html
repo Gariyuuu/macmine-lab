@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MacMine Lab — Usage Guide (Private)</title>
+<meta name="robots" content="noindex, nofollow" />
+<style>
+  :root {
+    --bg: #09090b;
+    --panel: #131316;
+    --border: rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #e4e4e7;
+    --text-dim: #9a9aa3;
+    --text-dimmer: #6b6b74;
+    --accent: #34d399;
+    --red: #f87171;
+    --mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 24px; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+  }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .wordmark { font-weight: 700; font-size: 17px; }
+  .wordmark .pick { color: var(--accent); }
+  header nav a { text-decoration: none; color: var(--text-dim); font-size: 14px; }
+
+  main { padding: 64px 0 100px; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 8px; }
+  h2 { font-size: 22px; margin: 0 0 12px; }
+  h3 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin: 32px 0 10px; }
+  p, li { font-size: 15px; color: var(--text-dim); }
+  p.lead { color: var(--text-dim); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: rgba(255,255,255,0.08);
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: var(--text);
+  }
+  .cli {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    margin: 12px 0;
+    overflow-x: auto;
+  }
+  .cli .c { color: var(--text-dimmer); }
+
+  #login-view { margin-top: 24px; }
+  #login-form { display: flex; gap: 10px; margin-top: 20px; }
+  #password {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: var(--mono);
+  }
+  #password:focus { outline: none; border-color: var(--accent); }
+  button {
+    background: var(--text);
+    color: #09090b;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #error { color: var(--red); font-size: 13px; margin-top: 12px; display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="wordmark"><span class="pick">⛏</span> MacMine Lab</div>
+    <nav><a href="/">← Home</a></nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div id="login-view">
+      <h1>Usage Guide</h1>
+      <p class="lead">Private — enter the password to view.</p>
+      <form id="login-form">
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password" autofocus />
+        <button type="submit" id="submit-btn">Unlock</button>
+      </form>
+      <p id="error"></p>
+    </div>
+    <div id="guide-view" style="display:none;"></div>
+  </div>
+</main>
+
+<script>
+  async function tryLoadGuide() {
+    try {
+      const res = await fetch("/api/guide");
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById("guide-view").innerHTML = data.html;
+        document.getElementById("login-view").style.display = "none";
+        document.getElementById("guide-view").style.display = "block";
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("submit-btn");
+    const err = document.getElementById("error");
+    err.style.display = "none";
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const password = document.getElementById("password").value;
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        await tryLoadGuide();
+      } else {
+        err.textContent = "Incorrect password.";
+        err.style.display = "block";
+      }
+    } catch {
+      err.textContent = "Something went wrong — try again.";
+      err.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Unlock";
+    }
+  });
+
+  tryLoadGuide(); // in case a valid session cookie is already set
+</script>
+
+</body>
+</html>
