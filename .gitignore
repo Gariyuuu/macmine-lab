@@ -14,4 +14,5 @@ data/*.db-shm
 data/bin/
 data/monerod-chain/
 data/p2pool-cache/
+showcase/.vercel/
 .DS_Store

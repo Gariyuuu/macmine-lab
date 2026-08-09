@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MacMine Lab — Local Apple Silicon Monero Mining Laboratory</title>
+<meta name="description" content="A local, transparent Monero (XMR) / RandomX mining laboratory for Apple Silicon Macs. Real hashing, real safety automation, real P2Pool — nothing faked." />
+<style>
+  :root {
+    --bg: #09090b;
+    --panel: #131316;
+    --panel-2: #17171b;
+    --border: rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #e4e4e7;
+    --text-dim: #9a9aa3;
+    --text-dimmer: #6b6b74;
+    --accent: #34d399;
+    --accent-dim: #1f7a5c;
+    --amber: #f0b429;
+    --mono: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(9,9,11,0.85);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+  }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .wordmark { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; white-space: nowrap; }
+  .wordmark .pick { color: var(--accent); }
+  nav a {
+    text-decoration: none;
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-left: 24px;
+    transition: color 0.15s;
+    white-space: nowrap;
+  }
+  nav a:hover { color: var(--text); }
+  @media (max-width: 640px) {
+    nav a.hide-mobile { display: none; }
+    nav a { margin-left: 16px; }
+  }
+
+  .hero {
+    padding: 88px 0 64px;
+    text-align: center;
+  }
+  .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .badge {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-dim);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 5px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .hero h1 {
+    font-size: clamp(34px, 6vw, 54px);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    margin: 0 0 20px;
+    font-weight: 700;
+  }
+  .hero p.lead {
+    max-width: 620px;
+    margin: 0 auto 32px;
+    color: var(--text-dim);
+    font-size: 17px;
+  }
+  .cta-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-primary { background: var(--text); color: #09090b; }
+  .btn-secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); }
+
+  .hero-metric {
+    margin: 56px auto 0;
+    max-width: 720px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+  .hero-metric .value { font-family: var(--mono); font-size: 44px; font-weight: 600; }
+  .hero-metric .label { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-dimmer); margin-top: 8px; }
+  .hero-metric .sub { font-size: 12px; color: var(--text-dimmer); margin-top: 16px; font-family: var(--mono); }
+
+  section { padding: 64px 0; border-top: 1px solid var(--border); }
+  h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .section-lead { color: var(--text-dim); max-width: 640px; margin: 0 0 40px; font-size: 15px; }
+
+  .is-isnt { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 700px) { .is-isnt { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .card h3 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .card.is h3 { color: var(--accent); }
+  .card.isnt h3 { color: var(--text-dimmer); }
+  .card ul { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 14px; }
+  .card li { margin-bottom: 9px; }
+
+  .shots { display: flex; flex-direction: column; gap: 48px; }
+  .shot-block { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .shot-caption { font-size: 14px; color: var(--text-dim); }
+  .shot-caption strong { color: var(--text); }
+  .shot-img-wrap {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: #000;
+  }
+  .shot-img-wrap img { display: block; width: 100%; height: auto; }
+
+  .phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .phase {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .phase .n { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .phase h4 { margin: 6px 0 8px; font-size: 15px; }
+  .phase p { margin: 0; font-size: 13px; color: var(--text-dim); }
+
+  .principles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .principle {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel-2);
+  }
+  .principle .icon { font-family: var(--mono); color: var(--amber); font-size: 13px; margin-bottom: 10px; }
+  .principle p { margin: 0; font-size: 13px; color: var(--text-dim); }
+
+  .stack-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stack-chip {
+    font-family: var(--mono);
+    font-size: 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text-dim);
+  }
+
+  .cli {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    overflow-x: auto;
+  }
+  .cli .c { color: var(--text-dimmer); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 0 60px;
+    text-align: center;
+    color: var(--text-dimmer);
+    font-size: 13px;
+  }
+  footer a { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="wordmark"><span class="pick">⛏</span> MacMine Lab</div>
+    <nav>
+      <a class="hide-mobile" href="#screenshots">Screenshots</a>
+      <a class="hide-mobile" href="#phases">Phases</a>
+      <a class="hide-mobile" href="#principles">Principles</a>
+      <a href="https://github.com/Gariyuuu/macmine-lab" target="_blank" rel="noreferrer">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" style="border-top:none;">
+  <div class="wrap">
+    <div class="badge-row">
+      <span class="badge"><span class="dot"></span>Apple Silicon only</span>
+      <span class="badge"><span class="dot"></span>100% local</span>
+      <span class="badge"><span class="dot"></span>7/7 phases complete</span>
+      <span class="badge"><span class="dot"></span>Open source</span>
+    </div>
+    <h1>A mining laboratory that<br />never fakes a number.</h1>
+    <p class="lead">
+      MacMine Lab is a local, transparent Monero (XMR) / RandomX mining laboratory for Apple
+      Silicon Macs — real XMRig hashing, real pool and P2Pool mining, real thermal/battery
+      safety automation, and real earnings estimates. If a measurement isn't available, it says
+      <em>Unavailable</em>. It never invents one.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/Gariyuuu/macmine-lab" target="_blank" rel="noreferrer">View source on GitHub</a>
+      <a class="btn btn-secondary" href="#screenshots">See it running</a>
+    </div>
+
+    <div class="hero-metric">
+      <div class="value">3.23 kH/s</div>
+      <div class="label">Real RandomX benchmark — Apple M4 Pro, 12 threads</div>
+      <div class="sub">↳ measured locally, not simulated. See the Journal for the full run history.</div>
+    </div>
+  </div>
+</section>
+
+<section id="what">
+  <div class="wrap">
+    <h2>What this is — and isn't</h2>
+    <p class="section-lead">
+      This is an educational tool for running real proof-of-work mining on your own Mac and
+      understanding exactly what it's doing. It is emphatically not any of the things mining
+      software usually gets confused for.
+    </p>
+    <div class="is-isnt">
+      <div class="card is">
+        <h3>It is</h3>
+        <ul>
+          <li>Real XMRig RandomX hashing you can watch happen</li>
+          <li>Real pool mining <em>and</em> real P2Pool decentralized mining</li>
+          <li>A CLI and a local dashboard, both talking to the same local backend</li>
+          <li>Automated thermal/battery safety with a hard, un-disableable critical-stop floor</li>
+          <li>Fully auditable — every binary's source and checksum is shown, not just asserted</li>
+        </ul>
+      </div>
+      <div class="card isnt">
+        <h3>It is not</h3>
+        <ul>
+          <li>Cryptojacking, a background miner, or malware</li>
+          <li>Anything that mines on a computer that isn't yours</li>
+          <li>A commercial operation — MacMine Lab takes 0% of anything mined</li>
+          <li>Hidden, auto-starting, or persistent without your explicit action</li>
+          <li>A cloud product — there is no account, no remote server, nothing to sign up for</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screenshots">
+  <div class="wrap">
+    <h2>The actual dashboard</h2>
+    <p class="section-lead">
+      These are real screenshots of the local dashboard connected to a live backend on this
+      machine — not mockups. This showcase page is static; the real dashboard only runs on your
+      own Mac against your own local backend.
+    </p>
+    <div class="shots">
+      <div class="shot-block">
+        <div class="shot-img-wrap"><img src="assets/dashboard.png" alt="MacMine Lab dashboard showing live hashrate, system health, real mining controls, safety status, and recent benchmark runs" loading="lazy" /></div>
+        <p class="shot-caption"><strong>Dashboard</strong> — live hashrate, real system telemetry (CPU/memory/battery/thermal), real mining controls, and a live safety status panel, all wired to one WebSocket.</p>
+      </div>
+      <div class="shot-block">
+        <div class="shot-img-wrap"><img src="assets/journal.png" alt="MacMine Lab experiment journal showing recommended Eco, Balanced, and Performance thread configs computed from real benchmark data" loading="lazy" /></div>
+        <p class="shot-caption"><strong>Experiment Journal</strong> — Eco/Balanced/Performance thread recommendations computed from your own measured benchmark runs, never assumed.</p>
+      </div>
+      <div class="shot-block">
+        <div class="shot-img-wrap"><img src="assets/p2pool.png" alt="MacMine Lab P2Pool page showing real storage requirements and an explicit consent gate before starting a blockchain sync" loading="lazy" /></div>
+        <p class="shot-caption"><strong>P2Pool setup</strong> — real, sourced storage estimates shown before any button that could start a multi-day, tens-of-gigabytes blockchain sync. Nothing this large ever starts automatically.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="phases">
+  <div class="wrap">
+    <h2>Built in seven verified phases</h2>
+    <p class="section-lead">
+      Each phase was built, run, tested against real hardware, and documented before moving to
+      the next — see the <a href="https://github.com/Gariyuuu/macmine-lab/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer">full changelog</a> for what was verified at every step.
+    </p>
+    <div class="phases">
+      <div class="phase"><div class="n">PHASE 1</div><h4>Benchmark Engine</h4><p>Apple Silicon detection, XMRig install/verification via Homebrew, fully-offline RandomX benchmarking, thread calibration.</p></div>
+      <div class="phase"><div class="n">PHASE 2</div><h4>Local Backend</h4><p>FastAPI bound to 127.0.0.1 only, SQLite persistence, a background telemetry sampler, a live WebSocket.</p></div>
+      <div class="phase"><div class="n">PHASE 3</div><h4>Dashboard</h4><p>Next.js + TypeScript + Tailwind + shadcn/ui — live hashrate chart, system health, a real XMRig log terminal.</p></div>
+      <div class="phase"><div class="n">PHASE 4</div><h4>Real Mining</h4><p>Wallet + pool configuration, a network-reachability connection test, live accepted/rejected shares.</p></div>
+      <div class="phase"><div class="n">PHASE 5</div><h4>First Penny &amp; Earnings</h4><p>Live XMR price and network difficulty, an electricity-cost calculator, achievement tracking with honest estimate labeling.</p></div>
+      <div class="phase"><div class="n">PHASE 6</div><h4>Safety Automation</h4><p>Thermal/battery automation with a hard critical-stop floor, real local notifications, an analytics page that refuses to fake a correlation.</p></div>
+      <div class="phase"><div class="n">PHASE 7</div><h4>P2Pool</h4><p>Decentralized, 0%-fee mining via a locally-run monerod + P2Pool, with an explicit consent gate before any large download.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="principles">
+  <div class="wrap">
+    <h2>The rule that shaped every phase</h2>
+    <p class="section-lead">
+      If a measurement isn't available, MacMine Lab says so — it never fabricates a hashrate, a
+      temperature, an earnings figure, or a correlation.
+    </p>
+    <div class="principles">
+      <div class="principle"><div class="icon">01</div><p>Every binary (XMRig, monerod, P2Pool) is installed only from its official source, with a computed SHA-256 shown, not just claimed.</p></div>
+      <div class="principle"><div class="icon">02</div><p>Estimated revenue, pool balance, and confirmed payout are three different, clearly-labeled things — never conflated.</p></div>
+      <div class="principle"><div class="icon">03</div><p>Critical thermal state stops mining immediately and unconditionally — the one safety floor that can't be turned off.</p></div>
+      <div class="principle"><div class="icon">04</div><p>The one action that can download 60–250+ GB (a Monero node sync) requires an explicit, restated-cost confirmation — never automatic.</p></div>
+      <div class="principle"><div class="icon">05</div><p>Analytics charts say "not enough data yet" below two data points rather than drawing a line through one dot.</p></div>
+      <div class="principle"><div class="icon">06</div><p>No seed phrase or private key is ever requested, stored, or transmitted — only a public receiving address.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="run-it">
+  <div class="wrap">
+    <h2>Run it yourself</h2>
+    <p class="section-lead">Apple Silicon Mac, Homebrew installed. Everything else is handled for you.</p>
+    <div class="cli">
+<span class="c">$</span> git clone https://github.com/Gariyuuu/macmine-lab.git<br/>
+<span class="c">$</span> cd macmine-lab &amp;&amp; ./setup.sh<br/>
+<span class="c">$</span> ./macmine benchmark --duration 30<br/>
+<span class="c"># or, for the dashboard:</span><br/>
+<span class="c">$</span> cd frontend &amp;&amp; npm install &amp;&amp; cd ..<br/>
+<span class="c">$</span> ./dev.sh
+    </div>
+    <div class="stack-row" style="margin-top:28px;">
+      <span class="stack-chip">Python 3.11</span>
+      <span class="stack-chip">FastAPI</span>
+      <span class="stack-chip">SQLite</span>
+      <span class="stack-chip">Next.js 16</span>
+      <span class="stack-chip">TypeScript</span>
+      <span class="stack-chip">Tailwind</span>
+      <span class="stack-chip">shadcn/ui</span>
+      <span class="stack-chip">XMRig</span>
+      <span class="stack-chip">monerod</span>
+      <span class="stack-chip">P2Pool</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>MacMine Lab is an educational project. Not affiliated with the Monero Project, XMRig, or P2Pool.</p>
+    <p><a href="https://github.com/Gariyuuu/macmine-lab" target="_blank" rel="noreferrer">Source on GitHub</a> · <a href="https://github.com/Gariyuuu/macmine-lab/blob/main/README.md" target="_blank" rel="noreferrer">README</a> · <a href="https://github.com/Gariyuuu/macmine-lab/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer">Changelog</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
