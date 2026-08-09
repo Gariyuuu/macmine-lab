@@ -17,7 +17,7 @@ from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import benchmark, db, hardware, integrity, miner
+from . import benchmark, db, hardware, integrity, miner, paths
 from .runner import benchmark_runner
 
 TELEMETRY_SAMPLE_INTERVAL_S = 8  # per project's telemetry sampling strategy
@@ -36,13 +36,14 @@ async def _lifespan(_app: FastAPI):
         _sampler_thread.join(timeout=2)
 
 
-app = FastAPI(title="MacMine Lab", version="0.2.0", lifespan=_lifespan)
+app = FastAPI(title="MacMine Lab", version="0.3.0", lifespan=_lifespan)
 
-# The dashboard (Phase 3) runs on a different localhost port during
-# development; both ends are 127.0.0.1-only so this is still fully local.
+# The dashboard runs on whatever localhost port Next.js picks (3000 is
+# frequently already taken by another local project) — match any local
+# port rather than hardcoding one, since both ends never leave this Mac.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -142,6 +143,20 @@ def get_benchmark_run(run_id: int):
     if not run:
         raise HTTPException(status_code=404, detail=f"No benchmark run with id {run_id}")
     return run
+
+
+@app.get("/api/logs/latest")
+def get_latest_log(lines: int = 200):
+    """Tail the most recent raw XMRig log MacMine Lab wrote. Real output
+    only — if nothing has run yet, this returns an empty list, not
+    fabricated log lines."""
+    log_files = sorted(paths.LOGS_DIR.glob("*.log"), key=lambda p: p.stat().st_mtime)
+    if not log_files:
+        return {"log_file": None, "lines": []}
+    latest = log_files[-1]
+    with open(latest, "r", errors="replace") as f:
+        all_lines = f.readlines()
+    return {"log_file": latest.name, "lines": [line.rstrip("\n") for line in all_lines[-lines:]]}
 
 
 @app.websocket("/ws/live")

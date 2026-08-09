@@ -102,12 +102,20 @@ def launch(extra_args: list[str], log_name: str) -> tuple[subprocess.Popen, Path
     binary = _xmrig_binary()
     paths.ensure_data_dirs()
     log_path = paths.LOGS_DIR / log_name
-    log_file = open(log_path, "w")
+
+    # xmrig's stdout is fully-buffered (not line-buffered) once it isn't a
+    # TTY, so redirecting stdout straight to a file loses everything if we
+    # SIGTERM the process before it exits normally — confirmed by testing
+    # (every log file this way came out 0 bytes). xmrig's own --log-file
+    # writes and flushes each line itself, so we use that instead and only
+    # keep stderr for crash diagnostics (stderr is unbuffered by default).
+    stderr_path = log_path.with_suffix(log_path.suffix + ".stderr")
+    stderr_file = open(stderr_path, "w")
 
     proc = subprocess.Popen(
-        [binary, *extra_args],
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
+        [binary, *extra_args, f"--log-file={log_path}"],
+        stdout=subprocess.DEVNULL,
+        stderr=stderr_file,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
     )

@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.3.0 — Mining Dashboard (Phase 3)
+
+Added the Next.js + TypeScript + Tailwind + shadcn/ui dashboard at
+`frontend/`, wired to the Phase 2 backend with no mock/placeholder data
+anywhere.
+
+Added:
+- `frontend/`: dark command-center dashboard — hero hashrate metric (live
+  during a benchmark, last-run average when idle), a live recharts hashrate
+  chart, a system health panel (CPU, memory, battery, thermal state via the
+  `ThermalBadge` component), benchmark start/stop controls (thread + duration
+  selects), a real XMRig log terminal, and a recent-runs history table.
+  Explicitly never shows a "MINING" state or XMR/USD figures — that's
+  Phase 4; this dashboard is honest that it's benchmark mode only.
+- `useLiveSocket` hook: reconnecting-with-backoff WebSocket client for
+  `/ws/live`. Callers pass an `onPayload` callback invoked inside the real
+  `onmessage` handler (not a `useEffect` reacting to state) so derived state
+  like chart-point accumulation doesn't trigger React's
+  cascading-render lint warnings — this is a real fix, not a suppression.
+- `GET /api/logs/latest` (backend): tails the most recently written XMRig
+  log file.
+- `./dev.sh`: runs the backend and dashboard together for local development.
+
+Fixed (found via actually driving the dashboard in a real browser with
+Playwright, not just unit tests):
+- **CORS**: the backend originally only allowlisted `localhost:3000`, but
+  Next.js silently falls back to another port whenever 3000 is taken (it
+  was, by an unrelated project on this Mac) — every REST call from the
+  browser failed with no visible error banner (hardware/history/logs
+  silently stayed empty). Fixed by matching any `localhost`/`127.0.0.1`
+  origin/port via `allow_origin_regex`, which is safe here since neither
+  end of this app ever leaves the Mac.
+- **Silent log loss (real bug, present since Phase 1)**: every XMRig log
+  file MacMine Lab ever wrote came out **0 bytes**. XMRig fully-buffers
+  stdout once it isn't a TTY, and `miner.stop()`'s SIGTERM discards
+  whatever was still buffered instead of flushing it. Fixed by using
+  XMRig's own `--log-file` flag (which flushes each line itself) instead of
+  redirecting stdout to a file; stderr, used for crash diagnostics, was
+  never affected since C's stderr is unbuffered by default. Verified with a
+  direct before/after comparison: the old approach produced a 0-byte file
+  after a live run, the new one produced real, readable XMRig output
+  mid-run.
+
+Verified manually this phase: installed Playwright into an isolated
+scratch directory, drove a real headless Chromium against the dev server,
+confirmed zero console errors, screenshotted both the idle and
+actively-benchmarking states, and watched real hashrate/CPU/log data flow
+through the full stack (backend → SQLite/WebSocket → browser) end to end.
+
+Not yet built: real wallet/pool mining, First Penny tracking,
+thermal/battery automation, P2Pool. Phases 4–7.
+
 ## v0.2.0 — Local Backend & SQLite (Phase 2)
 
 Added a local-only FastAPI backend and moved persistence from flat JSON

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/logs/*.log
+data/logs/*.log.stderr
 data/run/*.pid
 data/benchmarks/*.json
 data/integrity/*.json

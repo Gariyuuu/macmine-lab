@@ -9,12 +9,14 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from macmine_lab import api, db
+from macmine_lab import api, db, paths
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
+    monkeypatch.setattr(paths, "LOGS_DIR", tmp_path / "logs")
+    (tmp_path / "logs").mkdir()
     # Slow the sampler way down so it doesn't race the test / hammer the CPU.
     monkeypatch.setattr(api, "TELEMETRY_SAMPLE_INTERVAL_S", 999)
     with TestClient(api.app) as c:
@@ -97,6 +99,25 @@ def test_benchmark_history_empty(client):
 def test_benchmark_run_404_when_missing(client):
     resp = client.get("/api/benchmark/9999")
     assert resp.status_code == 404
+
+
+def test_latest_log_empty_when_nothing_has_run(client):
+    resp = client.get("/api/logs/latest")
+    assert resp.status_code == 200
+    assert resp.json() == {"log_file": None, "lines": []}
+
+
+def test_latest_log_tails_most_recent_file(client):
+    (paths.LOGS_DIR / "old.log").write_text("old line 1\nold line 2\n")
+    import time as _time
+    _time.sleep(0.01)
+    (paths.LOGS_DIR / "new.log").write_text("\n".join(f"line {i}" for i in range(300)) + "\n")
+
+    resp = client.get("/api/logs/latest?lines=5")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["log_file"] == "new.log"
+    assert body["lines"] == [f"line {i}" for i in range(295, 300)]
 
 
 def test_websocket_streams_real_payload(client):

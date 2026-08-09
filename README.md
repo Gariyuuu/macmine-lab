@@ -35,7 +35,7 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 2 of 7
+## Current status: Phase 3 of 7
 
 - ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
   install/verification via Homebrew, fully-offline duration-controlled
@@ -46,11 +46,15 @@ first few cents of real cryptocurrency.
   sampler records telemetry every 8 seconds. REST endpoints for hardware,
   live/historical telemetry, miner status/stop, and starting/reading
   benchmarks; a `/ws/live` WebSocket pushes real telemetry + miner + active
-  benchmark state once per second for whatever frontend eventually connects.
+  benchmark state once per second.
+- ✅ **Phase 3** — the dashboard: Next.js + TypeScript + Tailwind + shadcn/ui
+  at `frontend/`. Live hashrate hero metric + chart, system health panel,
+  benchmark start/stop controls, a real XMRig log terminal, and recent-runs
+  history — all wired to the Phase 2 backend, no mock data anywhere.
 
-**Not yet built:** the Next.js dashboard, real pool/wallet mining, First
-Penny tracking, and thermal/battery automation. Those are Phases 3–7. This
-README will be updated as each phase lands — see `CHANGELOG.md`.
+**Not yet built:** real pool/wallet mining, First Penny tracking, and
+thermal/battery automation. Those are Phases 4–7. This README will be
+updated as each phase lands — see `CHANGELOG.md`.
 
 ## Quick start
 
@@ -59,12 +63,17 @@ cd macmine-lab
 ./setup.sh
 ./macmine hardware
 ./macmine benchmark --duration 30
+
+# dashboard (needs Node/npm — run once):
+cd frontend && npm install && cd ..
+./dev.sh   # starts the backend + dashboard together; Ctrl-C stops both
 ```
 
 `setup.sh` checks for macOS + Apple Silicon, ensures Python 3.11 (arm64) and
 `uv` are available (installing them via Homebrew if missing — Homebrew
 itself is never auto-installed), creates an isolated virtualenv at
-`backend/.venv`, and installs/verifies XMRig via Homebrew.
+`backend/.venv`, and installs/verifies XMRig via Homebrew. It does not touch
+`frontend/` — run `npm install` there once yourself.
 
 ## Commands
 
@@ -104,6 +113,32 @@ All benchmark/telemetry/integrity data now lives in `data/macmine.db`
 (SQLite) rather than the flat JSON files Phase 1 used — the CLI and the API
 server read and write the same database, so `./macmine benchmark` and
 `./macmine setup` results show up immediately through the API too.
+
+## Dashboard (Phase 3)
+
+`frontend/` is a Next.js + TypeScript + Tailwind + shadcn/ui app. It talks
+directly to the backend from your browser (`NEXT_PUBLIC_MACMINE_API_BASE` /
+`NEXT_PUBLIC_MACMINE_WS_BASE` env vars override the defaults of
+`http://127.0.0.1:8834` / `ws://127.0.0.1:8834` if you run the backend on a
+different port). The backend's CORS policy matches any `localhost`/
+`127.0.0.1` origin at any port, since Next.js picks whatever port is free
+and this never leaves your Mac either way.
+
+The dashboard shows: a hero hashrate metric (live while a benchmark runs,
+last-run average when idle), a live chart, a system health panel (CPU,
+memory, battery, thermal state), benchmark start/stop controls, a real
+XMRig log terminal (tailing the actual log file XMRig writes — see the
+buffering note below), and a table of recent runs. It never shows a
+"MINING" state or any XMR/USD figures — those require Phase 4's real wallet/
+pool mining, so the dashboard is explicit that this is benchmark mode.
+
+**A real bug found and fixed this phase:** XMRig fully-buffers its stdout
+once it isn't attached to a terminal, so every log file MacMine Lab wrote by
+redirecting XMRig's stdout in Phase 1/2 came out **0 bytes** — the buffered
+data was lost when the process was SIGTERM'd rather than exiting normally.
+Fixed by using XMRig's own `--log-file` flag, which flushes each line
+itself; stderr (used for crash diagnostics) is unbuffered by default and
+was never affected.
 
 ## Benchmarking, explained
 
@@ -160,11 +195,16 @@ server only ever binds to 127.0.0.1.
   short relative to RandomX's dataset warmup; try `--duration 60`.
 - **Homebrew not found** — install it yourself from https://brew.sh; MacMine
   Lab deliberately does not install Homebrew on your behalf.
+- **Dashboard shows "Disconnected" / data never loads** — the backend isn't
+  running; start it with `./macmine serve` or `./dev.sh`.
+- **CORS errors in the browser console** — should not happen (the backend
+  matches any localhost/127.0.0.1 origin), but if you've customized
+  `NEXT_PUBLIC_MACMINE_API_BASE` to something other than localhost, you'll
+  need to add that origin to `allow_origin_regex` in `backend/macmine_lab/api.py`.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming, in order: the Next.js
-dashboard (Phase 3), real wallet/pool mining with accepted/rejected shares
-(Phase 4), First Penny tracking and live price/earnings estimates (Phase 5),
-thermal/battery automation and the experiment journal (Phase 6), then
-P2Pool (Phase 7).
+See `CHANGELOG.md` for what's shipped. Upcoming, in order: real wallet/pool
+mining with accepted/rejected shares (Phase 4), First Penny tracking and
+live price/earnings estimates (Phase 5), thermal/battery automation and the
+experiment journal (Phase 6), then P2Pool (Phase 7).
