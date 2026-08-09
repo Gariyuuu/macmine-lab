@@ -7,11 +7,12 @@ first few cents of real cryptocurrency.
 
 ## What this is
 
-- A CLI (and, in later phases, a local dashboard) that runs the real
-  [XMRig](https://xmrig.com) miner on **your Mac**, under **your control**.
-- Fully local: no cloud account, no remote database, nothing leaves your
-  machine except, once real mining is configured, the RandomX work you
-  choose to submit to a pool you configure yourself.
+- A CLI and a local dashboard that run the real [XMRig](https://xmrig.com)
+  miner on **your Mac**, under **your control**, mining to a pool and wallet
+  you configure yourself.
+- Fully local: no cloud account, no remote database. Nothing leaves your
+  machine except the RandomX work you explicitly choose to submit to a pool
+  once you've set one up — benchmark mode makes zero network connections.
 - Honest about what it shows you. If something isn't measured, MacMine Lab
   displays "Unavailable" — it never fabricates a hashrate, a temperature, or
   an earnings number.
@@ -35,7 +36,7 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 3 of 7
+## Current status: Phase 4 of 7
 
 - ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
   install/verification via Homebrew, fully-offline duration-controlled
@@ -51,9 +52,13 @@ first few cents of real cryptocurrency.
   at `frontend/`. Live hashrate hero metric + chart, system health panel,
   benchmark start/stop controls, a real XMRig log terminal, and recent-runs
   history — all wired to the Phase 2 backend, no mock data anywhere.
+- ✅ **Phase 4** — real XMR mining: a Setup page for your wallet address and
+  pool config, a network-reachability connection test, and a Real Mining
+  panel on the dashboard showing live accepted/rejected shares. MacMine Lab
+  never ships a pool preset — you add your own.
 
-**Not yet built:** real pool/wallet mining, First Penny tracking, and
-thermal/battery automation. Those are Phases 4–7. This README will be
+**Not yet built:** First Penny tracking, live price/earnings estimates, and
+thermal/battery automation. Those are Phases 5–7. This README will be
 updated as each phase lands — see `CHANGELOG.md`.
 
 ## Quick start
@@ -106,7 +111,20 @@ POST /api/benchmark/start?threads=&duration_seconds=30|60|300
 GET  /api/benchmark/live              # progress of whatever benchmark is running now
 GET  /api/benchmark/history?limit=
 GET  /api/benchmark/{id}
-WS   /ws/live                         # telemetry + miner + benchmark state, 1x/second
+POST /api/wallets/validate            # local format check only, no network, no save
+POST /api/wallets                     # {address, label?}
+GET  /api/wallets
+DELETE /api/wallets/{id}
+POST /api/pools                       # {name, host, port, tls, worker_name?, password?, notes?}
+GET  /api/pools
+DELETE /api/pools/{id}
+POST /api/pools/test-connection       # {host, port, tls} — TCP/TLS reachability only
+POST /api/mining/start                # {pool_id, wallet_id, threads}
+POST /api/mining/stop
+GET  /api/mining/live
+GET  /api/mining/history?limit=
+GET  /api/mining/{id}
+WS   /ws/live                         # telemetry + miner + benchmark + mining state, 1x/second
 ```
 
 All benchmark/telemetry/integrity data now lives in `data/macmine.db`
@@ -139,6 +157,42 @@ data was lost when the process was SIGTERM'd rather than exiting normally.
 Fixed by using XMRig's own `--log-file` flag, which flushes each line
 itself; stderr (used for crash diagnostics) is unbuffered by default and
 was never affected.
+
+## Real mining (Phase 4)
+
+**Setup:** open the dashboard and click "Setup →" (or go to `/setup`
+directly). Two things are required before you can mine for real:
+
+1. **A public XMR wallet address.** Get one from the official
+   [Monero CLI/GUI wallet](https://www.getmonero.org/downloads/) or any
+   reputable wallet app. MacMine Lab validates the address's format locally
+   (base58 charset, length, and prefix for standard/subaddress/integrated
+   addresses) — this catches typos but is **not** a full checksum
+   verification. There is a permanent on-screen warning: MacMine Lab never
+   asks for a seed phrase, recovery phrase, or private/spend key, and never
+   will — only the public address, which is all pool mining ever needs.
+2. **A pool.** MacMine Lab ships **no pool preset** — add your own (name,
+   host, port, TLS, optional worker name/password). We looked into shipping
+   verified defaults for well-known pools (SupportXMR, HashVault) but their
+   connection details are served from JS-rendered pages we couldn't fetch
+   reliably; rather than hardcode a host:port we couldn't verify as current,
+   we shipped the CRUD and left it to you — check the pool's own site for
+   its current details before adding it here.
+
+**Connection test** is a plain TCP (and, for TLS, TLS-handshake) reachability
+check against the host:port you entered — it does not speak the mining
+protocol or send your wallet address, so it can't tell you whether the pool
+will accept your address. That's only provable by actually mining, which is
+exactly what the dashboard's Real Mining panel shows live: accepted/rejected
+share counts, updated once per second over the same WebSocket the benchmark
+chart uses.
+
+Real mining has no fixed duration — it runs until you click STOP, which
+signals a background loop (checked every ~1s) that then stops XMRig the same
+verified way benchmark mode does (SIGTERM → SIGKILL fallback, PID re-checked
+before signaling). Every session — pool, wallet, threads, duration, average/
+peak hashrate, and final accepted/rejected share counts — is saved to
+`mining_sessions` in SQLite, separate from benchmark history.
 
 ## Benchmarking, explained
 
@@ -179,12 +233,15 @@ version — so this is auditable, not just asserted.
 ## Data & privacy
 
 Everything MacMine Lab writes lives under `data/` in this repo: `data/macmine.db`
-(SQLite — benchmark runs, telemetry history, miner integrity records),
-`data/logs/` (raw XMRig output), `data/run/` (the current PID file, if
-anything is running), `data/integrity/` (a human-readable snapshot of the
-latest integrity check). Nothing is uploaded anywhere. There is no
-authentication because there is nothing to authenticate against — the API
-server only ever binds to 127.0.0.1.
+(SQLite — benchmark runs, telemetry history, miner integrity records, wallet
+addresses, pool configs, and mining sessions), `data/logs/` (raw XMRig
+output), `data/run/` (the current PID file, if anything is running),
+`data/integrity/` (a human-readable snapshot of the latest integrity check).
+Nothing is uploaded anywhere. The wallets table stores only the public
+address and an optional label — there is no column for a seed phrase or
+private key, so there's nothing sensitive of that kind to leak even
+locally. There is no authentication because there is nothing to
+authenticate against — the API server only ever binds to 127.0.0.1.
 
 ## Troubleshooting
 
@@ -201,10 +258,22 @@ server only ever binds to 127.0.0.1.
   matches any localhost/127.0.0.1 origin), but if you've customized
   `NEXT_PUBLIC_MACMINE_API_BASE` to something other than localhost, you'll
   need to add that origin to `allow_origin_regex` in `backend/macmine_lab/api.py`.
+- **"Invalid wallet" when saving** — check the address is a real Monero
+  standard (starts `4`, 95 chars), subaddress (starts `8`, 95 chars), or
+  integrated (starts `4`, 106 chars) address with no typos. This is format
+  validation only; if the format looks right but the pool still rejects
+  every share, double check you copied the whole address.
+- **Connection test succeeds but mining shows 0 shares for a long time** —
+  normal at low hashrate: pool difficulty means shares can take minutes to
+  hours depending on your hashrate and the pool's configured difficulty.
+  Check the log terminal for `new job received` lines to confirm you're
+  actually receiving work from the pool.
+- **No accepted shares ever, log shows connection errors** — verify host/
+  port/TLS match what the pool currently publishes (pools change these
+  periodically); re-run the connection test after fixing.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming, in order: real wallet/pool
-mining with accepted/rejected shares (Phase 4), First Penny tracking and
-live price/earnings estimates (Phase 5), thermal/battery automation and the
-experiment journal (Phase 6), then P2Pool (Phase 7).
+See `CHANGELOG.md` for what's shipped. Upcoming, in order: First Penny
+tracking and live price/earnings estimates (Phase 5), thermal/battery
+automation and the experiment journal (Phase 6), then P2Pool (Phase 7).

@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.4.0 — Real Mining (Phase 4)
+
+Real XMR pool mining: wallet configuration, pool configuration, and live
+accepted/rejected shares. MacMine Lab still never touches a seed phrase or
+private key, and takes 0% of anything mined.
+
+Added:
+- `wallet.py`: local Monero address format validation (base58 charset,
+  length, standard/subaddress/integrated prefix) — format-only, not a full
+  checksum verification, and documented as such everywhere it's shown.
+- `pools.py`: pool connection testing — a plain TCP (and TLS-handshake for
+  TLS pools) reachability check against a host:port. Deliberately does not
+  speak the Stratum mining protocol or send a wallet address; whether a
+  wallet+pool combination actually works is only provable by mining, which
+  is what the live accepted/rejected share counts show.
+- `mining.py` / `mining_runner.py`: real, indefinite-duration XMRig pool
+  mining (mirrors `benchmark.py`/`runner.py`'s structure, but driven by a
+  `threading.Event` instead of a fixed duration). Tracks live hashrate and
+  `results.shares_good`/`shares_total` from XMRig's HTTP API, same as
+  benchmark mode's polling approach.
+- SQLite: `wallets`, `pools`, `mining_sessions` tables + full CRUD.
+- `xmrig_api.py`: extracted the local-HTTP-API polling helpers (free port,
+  token, fetch summary) that benchmark.py had inline, so mining.py reuses
+  them instead of duplicating.
+- REST: `/api/wallets*`, `/api/pools*`, `/api/mining*` (see README for the
+  full list). `/ws/live` now also streams mining state.
+- Frontend: `/setup` page (permanent seed-phrase warning, live-validated
+  wallet form, pool form with a connection-test button) and a "Real Mining"
+  panel on the dashboard (wallet/pool/thread selection, start/stop, live
+  accepted/rejected shares). The hero metric and top bar now distinguish
+  MINING from BENCHMARKING from IDLE.
+- 32 new backend tests (wallet validation against real address-shape edge
+  cases, pool connection tests against a real local TCP server — not
+  mocked, mining-session DB lifecycle, and the new API endpoints) — 73
+  total, all passing.
+
+Findings from this phase:
+- Tried to ship verified real pool presets (SupportXMR, HashVault) with
+  current fee/host/port — both pools' sites are JS-rendered and WebFetch
+  couldn't extract reliable connection details, and secondary sources
+  disagreed on ports. Rather than hardcode something unverified, shipped
+  full pool CRUD with **no preset** — exactly the "provide a mechanism to
+  add/edit pools, don't hardcode credentials" behavior the project's own
+  ground rules call for.
+- `xmrig --dry-run` (initially planned for the connection test) turned out
+  to be pure local config validation — confirmed by timing it against both
+  a real pool hostname and a nonexistent one: both returned in ~14ms,
+  meaning it never touches the network. Switched the connection test to a
+  real socket-level check instead.
+- Real Base UI gotcha (this project's shadcn `Select` uses `@base-ui/react`,
+  not Radix): `Select.Value` does **not** auto-resolve to the matching
+  `SelectItem`'s label the way Radix's does — it needs an explicit
+  `children` render-prop (`(value) => label`). Found by actually reading
+  the dashboard's rendered text in a browser test, where every dropdown
+  (including ones from Phase 3) was silently showing the raw stored value
+  ("1", "30") instead of its label. Fixed in all four dropdowns.
+- Full end-to-end proof, verified manually: ran the real Setup → Dashboard
+  flow in a browser (Playwright), validated an intentionally-bad address
+  and a correctly-shaped one, ran a real connection test against a local
+  test TCP server, saved a wallet and pool, then clicked **Start Mining**
+  for real — XMRig launched with the saved pool/wallet (log confirms
+  `POOL #1 127.0.0.1:<port>` and `DONATE 1%`, the real mining-mode donate
+  level vs. benchmark mode's 0%), STOP cleanly terminated it, and the
+  session landed in `mining_sessions` with `stopped_reason: "manual"` and
+  accurate (zero, since the test pool never issued a job) share counts. No
+  orphaned process afterward. A real pool was intentionally *not* used for
+  this test, to avoid mining real value to an address invented for testing
+  rather than provided by the user — real pool/wallet mining is a
+  user-initiated action with the user's own address.
+
+Not yet built: First Penny tracking, live price/earnings estimates,
+thermal/battery automation, P2Pool. Phases 5–7.
+
 ## v0.3.0 — Mining Dashboard (Phase 3)
 
 Added the Next.js + TypeScript + Tailwind + shadcn/ui dashboard at

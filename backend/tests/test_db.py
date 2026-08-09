@@ -107,3 +107,67 @@ def test_settings_roundtrip(isolated_db):
 
     db.set_setting("mining_mode", "balanced")
     assert db.get_setting("mining_mode") == "balanced"
+
+
+def test_wallet_crud(isolated_db):
+    wallet_id = db.insert_wallet("4" + "x" * 94, "standard", "My wallet")
+    wallet = db.get_wallet(wallet_id)
+    assert wallet["address"] == "4" + "x" * 94
+    assert wallet["label"] == "My wallet"
+    assert wallet["address_kind"] == "standard"
+
+    assert len(db.list_wallets()) == 1
+    db.delete_wallet(wallet_id)
+    assert db.get_wallet(wallet_id) is None
+    assert db.list_wallets() == []
+
+
+def test_pool_crud(isolated_db):
+    pool_id = db.insert_pool(
+        "My Pool", "pool.example.com", 3333, True, "worker1", None, "test notes"
+    )
+    pool = db.get_pool(pool_id)
+    assert pool["name"] == "My Pool"
+    assert pool["host"] == "pool.example.com"
+    assert pool["port"] == 3333
+    assert pool["tls"] == 1
+    assert pool["worker_name"] == "worker1"
+
+    assert len(db.list_pools()) == 1
+    db.delete_pool(pool_id)
+    assert db.get_pool(pool_id) is None
+
+
+def test_mining_session_lifecycle(isolated_db):
+    pool_id = db.insert_pool("My Pool", "pool.example.com", 3333, False, None, None, None)
+    wallet_id = db.insert_wallet("4" + "x" * 94, "standard", None)
+
+    session_id = db.insert_mining_session_start(pool_id, wallet_id, 6, "2026-01-01T00:00:00+00:00")
+    # Freshly started session has no end time or results yet.
+    in_progress = db.get_mining_session(session_id)
+    assert in_progress["ended_at"] is None
+    assert in_progress["shares_good"] is None
+    assert in_progress["hashrate_samples"] == []
+
+    db.finalize_mining_session(
+        session_id,
+        ended_at="2026-01-01T00:10:00+00:00",
+        duration_s=600.0,
+        avg_hs=2500.0,
+        peak_hs=2700.0,
+        shares_good=3,
+        shares_total=3,
+        hashes_total=1500000,
+        stopped_reason="manual",
+        hashrate_samples=[{"t_offset_s": 1.0, "hashrate_10s": 2500.0, "hashrate_60s": None}],
+    )
+
+    finished = db.get_mining_session(session_id)
+    assert finished["ended_at"] == "2026-01-01T00:10:00+00:00"
+    assert finished["shares_good"] == 3
+    assert finished["avg_hs"] == 2500.0
+    assert len(finished["hashrate_samples"]) == 1
+
+    history = db.list_mining_sessions()
+    assert len(history) == 1
+    assert history[0]["threads"] == 6

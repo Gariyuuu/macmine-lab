@@ -12,15 +12,10 @@ connections) for real hashrate samples, then stopping the process cleanly.
 from __future__ import annotations
 
 import datetime
-import json
-import secrets
-import socket
 import time
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass
 
-from . import db, hardware, miner
+from . import db, hardware, miner, xmrig_api
 
 MAX_BENCH_HASHES = "10M"  # ceiling XMRig accepts; never reached in a <=5min run
 POLL_INTERVAL_S = 1.0
@@ -82,22 +77,6 @@ def aggregate_stats(
     )
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _fetch_summary(port: int, token: str) -> dict | None:
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{port}/2/summary",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=2.0) as resp:
-            return json.loads(resp.read())
-    except (urllib.error.URLError, TimeoutError, ValueError, ConnectionError):
-        return None
 
 
 def run_benchmark(threads: int, duration_seconds: int, on_sample=None) -> BenchmarkResult:
@@ -110,8 +89,8 @@ def run_benchmark(threads: int, duration_seconds: int, on_sample=None) -> Benchm
     dashboard/WebSocket show real-time progress during a run instead of
     only seeing the final aggregate.
     """
-    port = _free_port()
-    token = secrets.token_hex(16)
+    port = xmrig_api.free_port()
+    token = xmrig_api.new_token()
 
     args = [
         f"--bench={MAX_BENCH_HASHES}",
@@ -144,7 +123,7 @@ def run_benchmark(threads: int, duration_seconds: int, on_sample=None) -> Benchm
             if elapsed >= duration_seconds:
                 break
 
-            summary = _fetch_summary(port, token)
+            summary = xmrig_api.fetch_summary(port, token)
             if summary:
                 if xmrig_version is None:
                     xmrig_version = summary.get("version")

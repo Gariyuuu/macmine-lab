@@ -1,30 +1,39 @@
 "use client";
 
+import Link from "next/link";
 import type { ConnectionState } from "@/lib/useLiveSocket";
 import type { HardwareInfo } from "@/lib/api";
+
+export type ActivityStatus = "MINING" | "BENCHMARKING" | "IDLE";
 
 export function TopBar({
   hardware,
   connection,
-  benchmarkRunning,
+  status,
 }: {
   hardware: HardwareInfo | null;
   connection: ConnectionState;
-  benchmarkRunning: boolean;
+  status: ActivityStatus;
 }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
       <div className="flex items-center gap-3">
         <span className="text-lg font-semibold tracking-tight">MacMine Lab</span>
-        <span className="text-xs text-zinc-500">Phase 3 · Benchmark Mode</span>
+        <span className="text-xs text-zinc-500">Phase 4</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-6 text-sm">
         <Stat label="CHIP" value={hardware?.chip ?? "Detecting…"} />
         <Stat
           label="STATUS"
-          value={benchmarkRunning ? "BENCHMARKING" : "IDLE"}
-          dotClassName={benchmarkRunning ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}
+          value={status}
+          dotClassName={
+            status === "MINING"
+              ? "bg-red-400 animate-pulse"
+              : status === "BENCHMARKING"
+                ? "bg-emerald-400 animate-pulse"
+                : "bg-zinc-600"
+          }
         />
         <Stat
           label="BACKEND"
@@ -35,6 +44,9 @@ export function TopBar({
             connection === "open" ? "bg-emerald-400" : connection === "connecting" ? "bg-amber-400" : "bg-red-500"
           }
         />
+        <Link href="/setup" className="text-xs text-zinc-500 hover:text-zinc-200">
+          Setup →
+        </Link>
       </div>
     </header>
   );

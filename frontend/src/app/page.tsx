@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { TopBar } from "@/components/TopBar";
+import { TopBar, type ActivityStatus } from "@/components/TopBar";
 import { HeroMetric } from "@/components/HeroMetric";
 import { HashrateChart, type ChartPoint } from "@/components/HashrateChart";
 import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 import { BenchmarkControls } from "@/components/BenchmarkControls";
+import { MiningControls } from "@/components/MiningControls";
 import { LogTerminal } from "@/components/LogTerminal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLiveSocket } from "@/lib/useLiveSocket";
@@ -16,7 +17,8 @@ export default function Dashboard() {
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
   const [history, setHistory] = useState<BenchmarkHistoryEntry[]>([]);
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([]);
-  const wasRunning = useRef(false);
+  const wasBenchmarking = useRef(false);
+  const wasMining = useRef(false);
 
   useEffect(() => {
     api.hardware().then(setHardware).catch(() => {});
@@ -26,37 +28,54 @@ export default function Dashboard() {
   // Runs inside the WebSocket's own onmessage callback (see useLiveSocket) —
   // a real external-system subscription, not a useEffect reacting to state.
   function handlePayload(payload: LiveWsPayload) {
-    const running = payload.benchmark.running;
+    const mining = payload.mining.running;
+    const benchmarking = !mining && payload.benchmark.running;
 
-    if (running && !wasRunning.current) {
+    if ((mining || benchmarking) && !wasMining.current && !wasBenchmarking.current) {
       setChartPoints([]);
     }
-    if (!running && wasRunning.current) {
+    if (!benchmarking && wasBenchmarking.current) {
       api.benchmarkHistory(10).then(setHistory).catch(() => {});
     }
-    wasRunning.current = running;
+    wasBenchmarking.current = benchmarking;
+    wasMining.current = mining;
 
-    if (running && payload.benchmark.elapsed_s !== null && payload.benchmark.latest_hashrate_10s !== null) {
-      const t = payload.benchmark.elapsed_s;
-      const hs = payload.benchmark.latest_hashrate_10s;
-      setChartPoints((prev) => {
-        if (prev.length > 0 && prev[prev.length - 1].t === t) return prev;
-        return [...prev, { t, hs }].slice(-300);
-      });
+    if (mining && payload.mining.elapsed_s !== null && payload.mining.latest_hashrate_10s !== null) {
+      pushChartPoint(payload.mining.elapsed_s, payload.mining.latest_hashrate_10s);
+    } else if (
+      benchmarking &&
+      payload.benchmark.elapsed_s !== null &&
+      payload.benchmark.latest_hashrate_10s !== null
+    ) {
+      pushChartPoint(payload.benchmark.elapsed_s, payload.benchmark.latest_hashrate_10s);
     }
+  }
+
+  function pushChartPoint(t: number, hs: number) {
+    setChartPoints((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1].t === t) return prev;
+      return [...prev, { t, hs }].slice(-300);
+    });
   }
 
   const { payload, state: connection } = useLiveSocket(handlePayload);
   const benchmark = payload?.benchmark ?? null;
+  const mining = payload?.mining ?? null;
+
+  const status: ActivityStatus = mining?.running
+    ? "MINING"
+    : benchmark?.running
+      ? "BENCHMARKING"
+      : "IDLE";
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      <TopBar hardware={hardware} connection={connection} benchmarkRunning={benchmark?.running ?? false} />
+      <TopBar hardware={hardware} connection={connection} status={status} />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-8">
         <Card className="border-white/10 bg-zinc-900/60">
           <CardContent>
-            <HeroMetric benchmark={benchmark} lastRun={history[0] ?? null} />
+            <HeroMetric mining={mining} benchmark={benchmark} lastRun={history[0] ?? null} />
           </CardContent>
         </Card>
 
@@ -71,10 +90,12 @@ export default function Dashboard() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <SystemHealthPanel telemetry={payload?.telemetry ?? null} miner={payload?.miner ?? null} />
-          <BenchmarkControls hardware={hardware} benchmark={benchmark} />
+          <MiningControls hardware={hardware} mining={mining} />
         </div>
 
-        <LogTerminal active={benchmark?.running ?? false} />
+        <BenchmarkControls hardware={hardware} benchmark={benchmark} />
+
+        <LogTerminal active={status !== "IDLE"} />
 
         {history.length > 0 && (
           <Card className="border-white/10 bg-zinc-900/60">
@@ -114,8 +135,9 @@ export default function Dashboard() {
       </main>
 
       <footer className="border-t border-white/10 px-6 py-4 text-center text-xs text-zinc-600">
-        Everything on this page runs locally on this Mac. No wallet, no pool, no network mining
-        yet — that&apos;s Phase 4.
+        Everything on this page runs locally on this Mac. Real mining sends work to the pool you
+        configured in Setup and pays out to the wallet you provided — MacMine Lab never redirects
+        rewards anywhere else.
       </footer>
     </div>
   );

@@ -124,11 +124,92 @@ export interface IntegrityRecord {
   checked_at: string;
 }
 
+export interface AddressValidation {
+  valid: boolean;
+  kind: "standard" | "subaddress" | "integrated" | null;
+  reason: string | null;
+}
+
+export interface Wallet {
+  id: number;
+  address: string;
+  label: string | null;
+  address_kind: string;
+  created_at: string;
+}
+
+export interface Pool {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  tls: number; // sqlite boolean
+  worker_name: string | null;
+  password: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PoolConnectionTestResult {
+  success: boolean;
+  latency_ms: number | null;
+  message: string;
+}
+
+export interface MiningLiveState {
+  running: boolean;
+  pool_id: number | null;
+  wallet_id: number | null;
+  threads: number | null;
+  session_id: number | null;
+  elapsed_s: number | null;
+  latest_hashrate_10s: number | null;
+  latest_hashrate_60s: number | null;
+  shares_good: number | null;
+  shares_total: number | null;
+  connection_pool: string | null;
+  last_result: MiningSessionResult | null;
+  error: string | null;
+}
+
+export interface MiningSessionResult {
+  session_id: number;
+  pool_id: number;
+  wallet_id: number;
+  threads: number;
+  started_at: string;
+  ended_at: string;
+  duration_s: number;
+  avg_hs: number | null;
+  peak_hs: number | null;
+  shares_good: number | null;
+  shares_total: number | null;
+  hashes_total: number | null;
+  stopped_reason: string;
+}
+
+export interface MiningHistoryEntry {
+  id: number;
+  pool_id: number;
+  wallet_id: number;
+  threads: number;
+  started_at: string;
+  ended_at: string | null;
+  duration_s: number | null;
+  avg_hs: number | null;
+  peak_hs: number | null;
+  shares_good: number | null;
+  shares_total: number | null;
+  hashes_total: number | null;
+  stopped_reason: string | null;
+}
+
 export interface LiveWsPayload {
   t: number;
   telemetry: SystemTelemetry;
   miner: MinerStatus;
   benchmark: BenchmarkLiveState;
+  mining: MiningLiveState;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -160,4 +241,47 @@ export const api = {
     apiFetch<BenchmarkHistoryEntry[]>(`/api/benchmark/history?limit=${limit}`),
   latestLog: (lines = 200) =>
     apiFetch<{ log_file: string | null; lines: string[] }>(`/api/logs/latest?lines=${lines}`),
+
+  validateWallet: (address: string) =>
+    apiFetch<AddressValidation>("/api/wallets/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    }),
+  createWallet: (address: string, label?: string) =>
+    apiFetch<Wallet>("/api/wallets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, label: label ?? null }),
+    }),
+  listWallets: () => apiFetch<Wallet[]>("/api/wallets"),
+  deleteWallet: (id: number) => apiFetch<{ deleted: boolean }>(`/api/wallets/${id}`, { method: "DELETE" }),
+
+  createPool: (pool: {
+    name: string; host: string; port: number; tls: boolean;
+    worker_name?: string | null; password?: string | null; notes?: string | null;
+  }) =>
+    apiFetch<Pool>("/api/pools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pool),
+    }),
+  listPools: () => apiFetch<Pool[]>("/api/pools"),
+  deletePool: (id: number) => apiFetch<{ deleted: boolean }>(`/api/pools/${id}`, { method: "DELETE" }),
+  testPoolConnection: (host: string, port: number, tls: boolean) =>
+    apiFetch<PoolConnectionTestResult>("/api/pools/test-connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host, port, tls }),
+    }),
+
+  miningStart: (poolId: number, walletId: number, threads: number) =>
+    apiFetch<{ started: boolean }>("/api/mining/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pool_id: poolId, wallet_id: walletId, threads }),
+    }),
+  miningStop: () => apiFetch<{ stopping: boolean }>("/api/mining/stop", { method: "POST" }),
+  miningLive: () => apiFetch<MiningLiveState>("/api/mining/live"),
+  miningHistory: (limit = 50) => apiFetch<MiningHistoryEntry[]>(`/api/mining/history?limit=${limit}`),
 };

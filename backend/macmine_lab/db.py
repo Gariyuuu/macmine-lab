@@ -76,6 +76,44 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS wallets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    address TEXT NOT NULL,
+    label TEXT,
+    address_kind TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS pools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    tls INTEGER NOT NULL DEFAULT 0,
+    worker_name TEXT,
+    password TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS mining_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pool_id INTEGER NOT NULL REFERENCES pools(id),
+    wallet_id INTEGER NOT NULL REFERENCES wallets(id),
+    threads INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_s REAL,
+    avg_hs REAL,
+    peak_hs REAL,
+    shares_good INTEGER,
+    shares_total INTEGER,
+    hashes_total INTEGER,
+    stopped_reason TEXT,
+    hashrate_samples_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -245,3 +283,115 @@ def get_setting(key: str, default: str | None = None) -> str | None:
             "SELECT value FROM app_settings WHERE key = ?", (key,)
         ).fetchone()
         return row["value"] if row else default
+
+
+# --- Wallets -----------------------------------------------------------
+# Public receiving addresses only. MacMine Lab never stores a seed phrase
+# or private/spend key — there is no column for one.
+
+def insert_wallet(address: str, address_kind: str, label: str | None) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO wallets (address, label, address_kind) VALUES (?, ?, ?)",
+            (address, label, address_kind),
+        )
+        return cur.lastrowid
+
+
+def list_wallets() -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM wallets ORDER BY id DESC").fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_wallet(wallet_id: int) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM wallets WHERE id = ?", (wallet_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def delete_wallet(wallet_id: int) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM wallets WHERE id = ?", (wallet_id,))
+
+
+# --- Pools ---------------------------------------------------------------
+
+def insert_pool(
+    name: str, host: str, port: int, tls: bool, worker_name: str | None,
+    password: str | None, notes: str | None,
+) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO pools (name, host, port, tls, worker_name, password, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (name, host, port, int(tls), worker_name, password, notes),
+        )
+        return cur.lastrowid
+
+
+def list_pools() -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM pools ORDER BY id DESC").fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_pool(pool_id: int) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM pools WHERE id = ?", (pool_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def delete_pool(pool_id: int) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM pools WHERE id = ?", (pool_id,))
+
+
+# --- Mining sessions -------------------------------------------------------
+
+def insert_mining_session_start(pool_id: int, wallet_id: int, threads: int, started_at: str) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO mining_sessions (pool_id, wallet_id, threads, started_at)
+               VALUES (?, ?, ?, ?)""",
+            (pool_id, wallet_id, threads, started_at),
+        )
+        return cur.lastrowid
+
+
+def finalize_mining_session(
+    session_id: int, ended_at: str, duration_s: float, avg_hs: float | None,
+    peak_hs: float | None, shares_good: int | None, shares_total: int | None,
+    hashes_total: int | None, stopped_reason: str, hashrate_samples: list,
+) -> None:
+    with connect() as conn:
+        conn.execute(
+            """UPDATE mining_sessions SET ended_at = ?, duration_s = ?, avg_hs = ?,
+               peak_hs = ?, shares_good = ?, shares_total = ?, hashes_total = ?,
+               stopped_reason = ?, hashrate_samples_json = ? WHERE id = ?""",
+            (
+                ended_at, duration_s, avg_hs, peak_hs, shares_good, shares_total,
+                hashes_total, stopped_reason, json.dumps(hashrate_samples), session_id,
+            ),
+        )
+
+
+def list_mining_sessions(limit: int = 50) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            """SELECT id, pool_id, wallet_id, threads, started_at, ended_at, duration_s,
+                      avg_hs, peak_hs, shares_good, shares_total, hashes_total, stopped_reason
+               FROM mining_sessions ORDER BY id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_mining_session(session_id: int) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM mining_sessions WHERE id = ?", (session_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["hashrate_samples"] = json.loads(d.pop("hashrate_samples_json"))
+        return d

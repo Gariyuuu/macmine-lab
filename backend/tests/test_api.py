@@ -126,4 +126,141 @@ def test_websocket_streams_real_payload(client):
     assert "telemetry" in payload
     assert "miner" in payload
     assert "benchmark" in payload
+    assert "mining" in payload
     assert payload["miner"]["running"] is False
+    assert payload["mining"]["running"] is False
+
+
+# --- Wallets -----------------------------------------------------------
+
+_VALID_ADDRESS = "4" + "x" * 94
+
+
+def test_validate_wallet_endpoint_valid(client):
+    resp = client.post("/api/wallets/validate", json={"address": _VALID_ADDRESS})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is True
+    assert resp.json()["kind"] == "standard"
+
+
+def test_validate_wallet_endpoint_invalid(client):
+    resp = client.post("/api/wallets/validate", json={"address": "not-a-real-address"})
+    assert resp.status_code == 200
+    assert resp.json()["valid"] is False
+
+
+def test_create_wallet_rejects_bad_format(client):
+    resp = client.post("/api/wallets", json={"address": "bad"})
+    assert resp.status_code == 400
+
+
+def test_create_and_list_and_delete_wallet(client):
+    resp = client.post("/api/wallets", json={"address": _VALID_ADDRESS, "label": "Test"})
+    assert resp.status_code == 200
+    wallet_id = resp.json()["id"]
+    assert resp.json()["address_kind"] == "standard"
+
+    listed = client.get("/api/wallets").json()
+    assert len(listed) == 1
+
+    del_resp = client.delete(f"/api/wallets/{wallet_id}")
+    assert del_resp.status_code == 200
+    assert client.get("/api/wallets").json() == []
+
+
+def test_delete_wallet_404_when_missing(client):
+    resp = client.delete("/api/wallets/9999")
+    assert resp.status_code == 404
+
+
+# --- Pools -----------------------------------------------------------
+
+def test_create_list_delete_pool(client):
+    resp = client.post(
+        "/api/pools",
+        json={"name": "Test Pool", "host": "pool.example.com", "port": 3333, "tls": False},
+    )
+    assert resp.status_code == 200
+    pool_id = resp.json()["id"]
+
+    listed = client.get("/api/pools").json()
+    assert len(listed) == 1
+
+    del_resp = client.delete(f"/api/pools/{pool_id}")
+    assert del_resp.status_code == 200
+    assert client.get("/api/pools").json() == []
+
+
+def test_pool_connection_test_endpoint_reports_real_failure(client):
+    # Nothing is listening on this port — a genuine, unmocked failure.
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+
+    resp = client.post(
+        "/api/pools/test-connection", json={"host": "127.0.0.1", "port": port, "tls": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
+
+
+# --- Mining ------------------------------------------------------------
+
+def test_mining_start_404_missing_pool(client):
+    resp = client.post(
+        "/api/mining/start", json={"pool_id": 9999, "wallet_id": 9999, "threads": 4}
+    )
+    assert resp.status_code == 404
+
+
+def test_mining_start_404_missing_wallet(client):
+    pool_resp = client.post(
+        "/api/pools", json={"name": "P", "host": "pool.example.com", "port": 3333, "tls": False}
+    )
+    pool_id = pool_resp.json()["id"]
+    resp = client.post(
+        "/api/mining/start", json={"pool_id": pool_id, "wallet_id": 9999, "threads": 4}
+    )
+    assert resp.status_code == 404
+
+
+def test_mining_start_invokes_runner_without_launching_real_xmrig(client):
+    pool_resp = client.post(
+        "/api/pools", json={"name": "P", "host": "pool.example.com", "port": 3333, "tls": False}
+    )
+    pool_id = pool_resp.json()["id"]
+    wallet_resp = client.post("/api/wallets", json={"address": _VALID_ADDRESS})
+    wallet_id = wallet_resp.json()["id"]
+
+    with patch.object(api.mining_runner, "start") as mock_start:
+        resp = client.post(
+            "/api/mining/start", json={"pool_id": pool_id, "wallet_id": wallet_id, "threads": 4}
+        )
+    assert resp.status_code == 200
+    assert resp.json()["started"] is True
+    mock_start.assert_called_once()
+
+
+def test_mining_live_when_idle(client):
+    resp = client.get("/api/mining/live")
+    assert resp.status_code == 200
+    assert resp.json()["running"] is False
+
+
+def test_mining_stop_when_idle_is_safe(client):
+    resp = client.post("/api/mining/stop")
+    assert resp.status_code == 200
+    assert resp.json() == {"stopping": True}
+
+
+def test_mining_history_empty(client):
+    resp = client.get("/api/mining/history")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_mining_session_404_when_missing(client):
+    resp = client.get("/api/mining/9999")
+    assert resp.status_code == 404

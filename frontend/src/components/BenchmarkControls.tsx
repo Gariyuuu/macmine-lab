@@ -78,8 +78,8 @@ export function BenchmarkControls({
               onValueChange={(v) => setThreads(Number(v))}
               disabled={running}
             >
-              <SelectTrigger className="w-28 font-mono">
-                <SelectValue />
+              <SelectTrigger className="w-32 font-mono">
+                <SelectValue>{(v: string) => `${v} thread${v === "1" ? "" : "s"}`}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Array.from({ length: totalCores }, (_, i) => i + 1).map((n) => (
@@ -99,7 +99,9 @@ export function BenchmarkControls({
               disabled={running}
             >
               <SelectTrigger className="w-36 font-mono">
-                <SelectValue />
+                <SelectValue>
+                  {(v: string) => DURATIONS.find((d) => d.value === v)?.label ?? v}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {DURATIONS.map((d) => (

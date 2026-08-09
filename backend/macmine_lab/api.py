@@ -17,7 +17,10 @@ from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import benchmark, db, hardware, integrity, miner, paths
+from pydantic import BaseModel
+
+from . import benchmark, db, hardware, integrity, miner, mining, paths, pools, wallet
+from .mining_runner import mining_runner
 from .runner import benchmark_runner
 
 TELEMETRY_SAMPLE_INTERVAL_S = 8  # per project's telemetry sampling strategy
@@ -36,7 +39,7 @@ async def _lifespan(_app: FastAPI):
         _sampler_thread.join(timeout=2)
 
 
-app = FastAPI(title="MacMine Lab", version="0.3.0", lifespan=_lifespan)
+app = FastAPI(title="MacMine Lab", version="0.4.0", lifespan=_lifespan)
 
 # The dashboard runs on whatever localhost port Next.js picks (3000 is
 # frequently already taken by another local project) — match any local
@@ -145,6 +148,139 @@ def get_benchmark_run(run_id: int):
     return run
 
 
+class WalletCreateRequest(BaseModel):
+    address: str
+    label: str | None = None
+
+
+class PoolCreateRequest(BaseModel):
+    name: str
+    host: str
+    port: int
+    tls: bool = False
+    worker_name: str | None = None
+    password: str | None = None
+    notes: str | None = None
+
+
+class PoolConnectionTestRequest(BaseModel):
+    host: str
+    port: int
+    tls: bool = False
+
+
+class MiningStartRequest(BaseModel):
+    pool_id: int
+    wallet_id: int
+    threads: int
+
+
+@app.post("/api/wallets/validate")
+def post_validate_wallet(body: WalletCreateRequest):
+    """Local format check only — no network call, and this never sees a
+    seed phrase or private key (there's no field for one)."""
+    return asdict(wallet.validate_monero_address(body.address))
+
+
+@app.post("/api/wallets")
+def post_create_wallet(body: WalletCreateRequest):
+    result = wallet.validate_monero_address(body.address)
+    if not result.valid:
+        raise HTTPException(status_code=400, detail=result.reason)
+    wallet_id = db.insert_wallet(body.address.strip(), result.kind, body.label)
+    return db.get_wallet(wallet_id)
+
+
+@app.get("/api/wallets")
+def get_wallets():
+    return db.list_wallets()
+
+
+@app.delete("/api/wallets/{wallet_id}")
+def delete_wallet_route(wallet_id: int):
+    if not db.get_wallet(wallet_id):
+        raise HTTPException(status_code=404, detail=f"No wallet with id {wallet_id}")
+    db.delete_wallet(wallet_id)
+    return {"deleted": True}
+
+
+@app.post("/api/pools")
+def post_create_pool(body: PoolCreateRequest):
+    pool_id = db.insert_pool(
+        body.name, body.host, body.port, body.tls, body.worker_name, body.password, body.notes
+    )
+    return db.get_pool(pool_id)
+
+
+@app.get("/api/pools")
+def get_pools():
+    return db.list_pools()
+
+
+@app.delete("/api/pools/{pool_id}")
+def delete_pool_route(pool_id: int):
+    if not db.get_pool(pool_id):
+        raise HTTPException(status_code=404, detail=f"No pool with id {pool_id}")
+    db.delete_pool(pool_id)
+    return {"deleted": True}
+
+
+@app.post("/api/pools/test-connection")
+def post_test_pool_connection(body: PoolConnectionTestRequest):
+    """Plain TCP/TLS reachability check — no wallet, no mining protocol.
+    Proves the pool server is reachable; whether your wallet address is
+    accepted only shows up once you actually start mining."""
+    return asdict(pools.test_pool_connection(body.host, body.port, body.tls))
+
+
+@app.post("/api/mining/start")
+def post_mining_start(body: MiningStartRequest):
+    pool = db.get_pool(body.pool_id)
+    if not pool:
+        raise HTTPException(status_code=404, detail=f"No pool with id {body.pool_id}")
+    w = db.get_wallet(body.wallet_id)
+    if not w:
+        raise HTTPException(status_code=404, detail=f"No wallet with id {body.wallet_id}")
+    if not integrity.find_xmrig_binary():
+        raise HTTPException(status_code=409, detail="xmrig is not installed — run `./macmine setup`.")
+    if miner.get_status().running:
+        raise HTTPException(
+            status_code=409, detail="MacMine Lab already has an xmrig process running. Stop it first."
+        )
+    try:
+        mining_runner.start(pool, w, body.threads)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"started": True, "pool_id": pool["id"], "wallet_id": w["id"], "threads": body.threads}
+
+
+@app.post("/api/mining/stop")
+def post_mining_stop():
+    """Signals the mining loop to stop on its next ~1s tick, which then
+    SIGTERMs xmrig itself — not instant, but bounded to a few seconds, same
+    as benchmark stop. Poll /api/mining/live to see when it's confirmed."""
+    mining_runner.stop()
+    return {"stopping": True}
+
+
+@app.get("/api/mining/live")
+def get_mining_live():
+    return asdict(mining_runner.snapshot())
+
+
+@app.get("/api/mining/history")
+def get_mining_history(limit: int = 50):
+    return db.list_mining_sessions(limit=limit)
+
+
+@app.get("/api/mining/{session_id}")
+def get_mining_session_detail(session_id: int):
+    session = db.get_mining_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"No mining session with id {session_id}")
+    return session
+
+
 @app.get("/api/logs/latest")
 def get_latest_log(lines: int = 200):
     """Tail the most recent raw XMRig log MacMine Lab wrote. Real output
@@ -175,6 +311,7 @@ async def ws_live(websocket: WebSocket):
                 "telemetry": asdict(telemetry),
                 "miner": asdict(status),
                 "benchmark": asdict(benchmark_runner.snapshot()),
+                "mining": asdict(mining_runner.snapshot()),
             }
             await websocket.send_json(payload)
             await asyncio.sleep(1.0)
