@@ -1,16 +1,19 @@
-"""MacMine Lab CLI — Phase 1: hardware detection, XMRig install/verify,
-real RandomX benchmarking, thread calibration, and STOP.
+"""MacMine Lab CLI — hardware detection, XMRig install/verify, real
+RandomX benchmarking, thread calibration, and STOP.
 
-No real mining, wallets, or pools yet — that's Phase 4. Everything here is
-either a real measurement or explicitly labeled as unavailable/not yet run.
+Everything here is either a real measurement or explicitly labeled as
+unavailable/not yet run. Real wallet/pool mining, the dashboard, and
+everything else live in the local backend (`./macmine serve`) and
+frontend, not this CLI.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import asdict
 
-from . import benchmark, hardware, integrity, miner
+from . import benchmark, calibration, hardware, integrity, miner
 
 
 def _fmt(value, suffix: str = "", none_label: str = "Unavailable") -> str:
@@ -158,22 +161,14 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
         print("\nNo usable results — cannot recommend configs.")
         return 0
 
-    def best_in_range(lo_frac, hi_frac):
-        in_range = [r for r in tested if lo_frac <= r.threads / total <= hi_frac]
-        if not in_range:
-            return None
-        return max(in_range, key=lambda r: r.avg_hs)
-
-    eco = best_in_range(0.20, 0.40)
-    balanced = best_in_range(0.40, 0.65)
-    performance = max(tested, key=lambda r: r.avg_hs)
+    recs = calibration.recommend_configs([asdict(r) for r in results], total)
 
     print("\n=== Recommended configs (measured, not assumed) ===")
-    print(f"Eco:         {eco.threads if eco else 'not tested in range'} threads"
-          + (f" ({_fmt(eco.avg_hs, ' H/s')})" if eco else ""))
-    print(f"Balanced:    {balanced.threads if balanced else 'not tested in range'} threads"
-          + (f" ({_fmt(balanced.avg_hs, ' H/s')})" if balanced else ""))
-    print(f"Performance: {performance.threads} threads ({_fmt(performance.avg_hs, ' H/s')})")
+    for label in ("eco", "balanced", "performance"):
+        rec = recs[label]
+        threads_str = f"{rec.threads} threads" if rec.tested else "not tested in range"
+        hs_str = f" ({_fmt(rec.avg_hs, ' H/s')})" if rec.tested else ""
+        print(f"{label.capitalize():<12} {threads_str}{hs_str}")
     return 0
 
 

@@ -23,6 +23,26 @@ from . import db, miner, xmrig_api
 POLL_INTERVAL_S = 1.0
 
 
+class StopSignal:
+    """Like threading.Event, but carries *why* — so an auto-stop triggered
+    by the safety manager (thermal/battery) records an honest reason in
+    session history instead of a generic "manual"."""
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+        self.reason = "manual"
+
+    def set(self, reason: str = "manual") -> None:
+        self.reason = reason
+        self._event.set()
+
+    def is_set(self) -> bool:
+        return self._event.is_set()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        return self._event.wait(timeout)
+
+
 @dataclass
 class MiningHashrateSample:
     t_offset_s: float
@@ -69,7 +89,7 @@ def build_mining_args(pool: dict, wallet_address: str, threads: int, http_port: 
 
 
 def run_mining_session(
-    pool: dict, wallet: dict, threads: int, stop_event: threading.Event, on_sample=None
+    pool: dict, wallet: dict, threads: int, stop_event: StopSignal, on_sample=None
 ) -> MiningSessionResult:
     port = xmrig_api.free_port()
     token = xmrig_api.new_token()
@@ -82,6 +102,7 @@ def run_mining_session(
 
     hashrate_samples: list[MiningHashrateSample] = []
     stopped_reason = "manual"
+    crashed = False
     last_summary: dict | None = None
 
     try:
@@ -89,6 +110,7 @@ def run_mining_session(
         while not stop_event.is_set():
             if proc.poll() is not None:
                 stopped_reason = f"xmrig exited unexpectedly (code {proc.returncode})"
+                crashed = True
                 break
 
             elapsed = time.monotonic() - start
@@ -102,6 +124,8 @@ def run_mining_session(
                     on_sample(sample, summary)
 
             stop_event.wait(POLL_INTERVAL_S)
+        if not crashed and stop_event.is_set():
+            stopped_reason = stop_event.reason
     finally:
         miner.stop(proc.pid)
 

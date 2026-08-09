@@ -334,3 +334,62 @@ def test_first_penny_empty_state(client):
     assert body["estimated_usd_total"] == 0.0
     assert len(body["achievements"]) == 10
     assert all(not a["unlocked"] for a in body["achievements"])
+
+
+# --- Safety ---------------------------------------------------------------
+
+def test_safety_status_reflects_real_telemetry(client):
+    resp = client.get("/api/safety/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["thermal_state"] in ("NORMAL", "WARM", "HOT", "CRITICAL", "UNAVAILABLE")
+    assert body["watching"] is True  # lifespan started it for this TestClient
+
+
+def test_safety_settings_defaults(client):
+    resp = client.get("/api/safety/settings")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "automation_enabled": True,
+        "allow_mining_on_battery": False,
+        "battery_pause_threshold_percent": 30,
+    }
+
+
+def test_safety_settings_roundtrip(client):
+    resp = client.post(
+        "/api/safety/settings",
+        json={
+            "safety_automation_enabled": False,
+            "allow_mining_on_battery": True,
+            "battery_pause_threshold_percent": 50,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "automation_enabled": False,
+        "allow_mining_on_battery": True,
+        "battery_pause_threshold_percent": 50,
+    }
+
+
+def test_safety_settings_rejects_invalid_percent(client):
+    resp = client.post("/api/safety/settings", json={"battery_pause_threshold_percent": 150})
+    assert resp.status_code == 400
+
+
+# --- Journal & Analytics ---------------------------------------------------
+
+def test_journal_empty(client):
+    resp = client.get("/api/journal")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["runs"] == []
+    assert body["recommendations"]["eco"]["tested"] is False
+
+
+def test_analytics_empty(client):
+    resp = client.get("/api/analytics")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["threads_vs_hashrate"]["available"] is False

@@ -19,9 +19,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 
-from . import achievements, benchmark, db, economics, hardware, integrity, miner, mining, network, paths, pools, price, wallet
+from . import (
+    achievements, analytics, benchmark, calibration, db, economics, hardware,
+    integrity, miner, mining, network, notifications, paths, pools, price, safety, wallet,
+)
 from .mining_runner import mining_runner
 from .runner import benchmark_runner
+from .safety import safety_manager
 
 TELEMETRY_SAMPLE_INTERVAL_S = 8  # per project's telemetry sampling strategy
 
@@ -33,13 +37,15 @@ async def _lifespan(_app: FastAPI):
     global _sampler_thread
     _sampler_thread = threading.Thread(target=_telemetry_sampler_loop, daemon=True)
     _sampler_thread.start()
+    safety_manager.start()
     yield
     _sampler_stop.set()
     if _sampler_thread:
         _sampler_thread.join(timeout=2)
+    safety_manager.stop()
 
 
-app = FastAPI(title="MacMine Lab", version="0.5.0", lifespan=_lifespan)
+app = FastAPI(title="MacMine Lab", version="0.6.0", lifespan=_lifespan)
 
 # The dashboard runs on whatever localhost port Next.js picks (3000 is
 # frequently already taken by another local project) — match any local
@@ -346,6 +352,52 @@ def get_first_penny():
     return achievements.get_first_penny_state()
 
 
+class SafetySettingsRequest(BaseModel):
+    safety_automation_enabled: bool | None = None
+    allow_mining_on_battery: bool | None = None
+    battery_pause_threshold_percent: int | None = None
+
+
+@app.get("/api/safety/status")
+def get_safety_status():
+    return asdict(safety_manager.snapshot())
+
+
+@app.get("/api/safety/settings")
+def get_safety_settings():
+    return asdict(safety.get_settings())
+
+
+@app.post("/api/safety/settings")
+def post_safety_settings(body: SafetySettingsRequest):
+    if body.safety_automation_enabled is not None:
+        db.set_setting("safety_automation_enabled", "true" if body.safety_automation_enabled else "false")
+    if body.allow_mining_on_battery is not None:
+        db.set_setting("allow_mining_on_battery", "true" if body.allow_mining_on_battery else "false")
+    if body.battery_pause_threshold_percent is not None:
+        if not (0 <= body.battery_pause_threshold_percent <= 100):
+            raise HTTPException(status_code=400, detail="battery_pause_threshold_percent must be 0-100")
+        db.set_setting("battery_pause_threshold_percent", str(body.battery_pause_threshold_percent))
+    return asdict(safety.get_settings())
+
+
+@app.get("/api/journal")
+def get_journal(limit: int = 100):
+    hw = hardware.detect_hardware()
+    runs = db.list_benchmark_runs(limit=limit)
+    annotated = [{**r, "result_label": calibration.label_result(r, runs)} for r in runs]
+    recommendations = calibration.recommend_configs(runs, hw.total_cores or 8)
+    return {
+        "runs": annotated,
+        "recommendations": {k: asdict(v) for k, v in recommendations.items()},
+    }
+
+
+@app.get("/api/analytics")
+def get_analytics_route():
+    return analytics.get_analytics()
+
+
 @app.get("/api/logs/latest")
 def get_latest_log(lines: int = 200):
     """Tail the most recent raw XMRig log MacMine Lab wrote. Real output
@@ -377,6 +429,7 @@ async def ws_live(websocket: WebSocket):
                 "miner": asdict(status),
                 "benchmark": asdict(benchmark_runner.snapshot()),
                 "mining": asdict(mining_runner.snapshot()),
+                "safety": asdict(safety_manager.snapshot()),
             }
             await websocket.send_json(payload)
             await asyncio.sleep(1.0)

@@ -8,6 +8,7 @@ import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 import { BenchmarkControls } from "@/components/BenchmarkControls";
 import { MiningControls } from "@/components/MiningControls";
 import { FirstPennyCard } from "@/components/FirstPennyCard";
+import { SafetyPanel } from "@/components/SafetyPanel";
 import { LogTerminal } from "@/components/LogTerminal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLiveSocket } from "@/lib/useLiveSocket";
@@ -95,9 +96,11 @@ export default function Dashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
+          <SafetyPanel telemetry={payload?.telemetry ?? null} safety={payload?.safety ?? null} />
           <FirstPennyCard />
-          <BenchmarkControls hardware={hardware} benchmark={benchmark} />
         </div>
+
+        <BenchmarkControls hardware={hardware} benchmark={benchmark} />
 
         <LogTerminal active={status !== "IDLE"} />
 

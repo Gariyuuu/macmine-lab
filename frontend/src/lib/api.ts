@@ -268,12 +268,63 @@ export interface FirstPennyState {
   achievements: Achievement[];
 }
 
+export interface SafetyStatus {
+  watching: boolean;
+  thermal_state: ThermalInfo["state"];
+  on_ac_power: boolean | null;
+  battery_percent: number | null;
+  automation_enabled: boolean;
+  allow_mining_on_battery: boolean;
+  battery_pause_threshold_percent: number;
+  last_action: string | null;
+  last_action_at: string | null;
+}
+
+export interface SafetySettings {
+  automation_enabled: boolean;
+  allow_mining_on_battery: boolean;
+  battery_pause_threshold_percent: number;
+}
+
+export interface JournalRun extends BenchmarkHistoryEntry {
+  result_label: string;
+}
+
+export interface CalibrationRecommendation {
+  threads: number | null;
+  avg_hs: number | null;
+  tested: boolean;
+}
+
+export interface JournalResponse {
+  runs: JournalRun[];
+  recommendations: {
+    eco: CalibrationRecommendation;
+    balanced: CalibrationRecommendation;
+    performance: CalibrationRecommendation;
+  };
+}
+
+export interface AnalyticsSeries {
+  available: boolean;
+  reason: string | null;
+  points: { x: number | string; y: number; label: string | null }[];
+}
+
+export interface AnalyticsResponse {
+  threads_vs_hashrate: AnalyticsSeries;
+  threads_vs_efficiency: AnalyticsSeries;
+  session_duration_vs_hashrate: AnalyticsSeries;
+  thermal_state_vs_hashrate: AnalyticsSeries;
+}
+
 export interface LiveWsPayload {
   t: number;
   telemetry: SystemTelemetry;
   miner: MinerStatus;
   benchmark: BenchmarkLiveState;
   mining: MiningLiveState;
+  safety: SafetyStatus;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -361,4 +412,20 @@ export const api = {
   estimateEarnings: (hashrateHs: number) =>
     apiFetch<EarningsEstimate>(`/api/economics/estimate?hashrate_hs=${hashrateHs}`),
   firstPenny: () => apiFetch<FirstPennyState>("/api/first-penny"),
+
+  safetyStatus: () => apiFetch<SafetyStatus>("/api/safety/status"),
+  safetySettings: () => apiFetch<SafetySettings>("/api/safety/settings"),
+  setSafetySettings: (settings: {
+    safety_automation_enabled?: boolean;
+    allow_mining_on_battery?: boolean;
+    battery_pause_threshold_percent?: number;
+  }) =>
+    apiFetch<SafetySettings>("/api/safety/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    }),
+
+  journal: (limit = 100) => apiFetch<JournalResponse>(`/api/journal?limit=${limit}`),
+  analytics: () => apiFetch<AnalyticsResponse>("/api/analytics"),
 };

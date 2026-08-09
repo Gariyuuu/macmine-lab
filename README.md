@@ -36,7 +36,7 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 5 of 7
+## Current status: Phase 6 of 7
 
 - ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
   install/verification via Homebrew, fully-offline duration-controlled
@@ -61,9 +61,14 @@ first few cents of real cryptocurrency.
   an Earnings page with a real electricity-cost calculator, and a First
   Penny page with achievements — all built on real, cached, gracefully-
   degrading data, never fabricated numbers.
+- ✅ **Phase 6** — automated thermal/battery safety, real local
+  notifications, an Experiment Journal (recommended Eco/Balanced/
+  Performance configs computed from your actual benchmark history), and an
+  Analytics page (real correlations only — a chart says "not enough data
+  yet" rather than faking one). Critical thermal state always stops mining
+  immediately; that's a hard floor that can't be turned off.
 
-**Not yet built:** thermal/battery automation, the experiment journal, and
-P2Pool. Those are Phases 6–7. This README will be updated as each phase
+**Not yet built:** P2Pool. That's Phase 7. This README will be updated as each phase
 lands — see `CHANGELOG.md`.
 
 ## Quick start
@@ -135,7 +140,12 @@ GET  /api/economics/settings          # your saved electricity rate + power draw
 POST /api/economics/settings          # {electricity_rate_usd_per_kwh?, power_draw_watts?}
 GET  /api/economics/estimate?hashrate_hs=
 GET  /api/first-penny                 # cumulative real stats + estimated earnings + achievements
-WS   /ws/live                         # telemetry + miner + benchmark + mining state, 1x/second
+GET  /api/safety/status               # live thermal/battery state + last automated action
+GET  /api/safety/settings
+POST /api/safety/settings             # {safety_automation_enabled?, allow_mining_on_battery?, battery_pause_threshold_percent?}
+GET  /api/journal                     # benchmark history + result labels + recommended configs
+GET  /api/analytics                   # threads/efficiency/duration/thermal correlations, real data only
+WS   /ws/live                         # telemetry + miner + benchmark + mining + safety state, 1x/second
 ```
 
 All benchmark/telemetry/integrity data now lives in `data/macmine.db`
@@ -204,6 +214,52 @@ verified way benchmark mode does (SIGTERM → SIGKILL fallback, PID re-checked
 before signaling). Every session — pool, wallet, threads, duration, average/
 peak hashrate, and final accepted/rejected share counts — is saved to
 `mining_sessions` in SQLite, separate from benchmark history.
+
+## Safety Automation & Journal (Phase 6)
+
+A background safety manager (same pattern as the telemetry sampler — a
+thread checking real state every 8 seconds) watches thermal and battery
+telemetry whenever mining or a benchmark is active:
+
+- **NORMAL** → nothing happens.
+- **WARM** → a local macOS notification (rate-limited to once per 5 minutes
+  per notification type so it can't spam you), no automatic changes.
+- **HOT** → notification, and if you're mining (not benchmarking), MacMine
+  Lab stops the session and restarts it at ~75% of its previous thread
+  count. Benchmark mode is notification-only here — a benchmark's fixed,
+  short duration and single-shot API contract made live reconfiguration
+  more engineering risk than it was worth, so that's a deliberate scope
+  limit rather than an oversight.
+- **CRITICAL** → notification and an immediate stop, whether you're mining
+  or benchmarking. **This cannot be disabled** — it's a hard safety floor,
+  independent of the automation toggle below, matching the project's
+  stance against ever bypassing thermal protection.
+
+Separately, while mining (not benchmarking): disconnecting AC power stops
+mining unless you've explicitly enabled "allow mining on battery" in
+Setup; even then, mining stops if battery drops below a threshold you set
+(default 30%). All of this reads real telemetry from `hardware.py` (the
+same thermal-state derivation from Phase 1's `pmset -g therm` output) —
+nothing here invents a temperature or a battery percentage. Notifications
+use `osascript display notification`, entirely local; macOS may ask you to
+grant the terminal/app that runs `./macmine serve` notification permission
+the first time.
+
+**`/journal`** lists every benchmark you've run with a short, honestly-
+computed result label ("Best raw performance", "Most efficient (H/s per
+thread)", or just "Recorded" when nothing stands out — never a fabricated
+superlative), plus recommended Eco/Balanced/Performance thread counts
+computed from your actual measured results (shared logic with `./macmine
+calibrate`, extracted into `calibration.py` so the CLI and the API agree).
+A range with no data in it says "not enough data" rather than guessing.
+
+**`/analytics`** charts real correlations only — threads vs. hashrate,
+threads vs. efficiency, mining session length vs. hashrate, and thermal
+state vs. average hashrate — each requiring at least 2 real data points
+before it's considered "available." Deliberately does **not** include a
+"power draw vs. hashrate" chart: power draw is a single user-entered
+constant (see Earnings below), not a per-run measurement, so plotting it
+against hashrate would imply a measured relationship that doesn't exist.
 
 ## First Penny & Earnings (Phase 5)
 
@@ -322,8 +378,19 @@ authenticate against — the API server only ever binds to 127.0.0.1.
   minuscule, and electricity cost can easily exceed estimated revenue at
   home electricity rates. This is genuinely how small-scale CPU mining
   economics look; MacMine Lab won't sugarcoat the number.
+- **No notifications appearing** — macOS may need you to grant the
+  terminal/app running `./macmine serve` permission in System Settings →
+  Notifications. `notifications.send()` never raises on failure, so a
+  missing notification doesn't break anything else — check permissions
+  first.
+- **Mining stopped and I don't know why** — check `/api/safety/status`'s
+  `last_action`, or the Safety panel on the dashboard; it records exactly
+  which automated rule fired (thermal or battery) and when.
+- **Journal/Analytics show "not enough data"** — genuinely means what it
+  says: run more benchmarks (varying thread counts) or let a few mining
+  sessions complete. Neither page will draw a conclusion from 1 data point.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming, in order: thermal/battery
-automation and the experiment journal (Phase 6), then P2Pool (Phase 7).
+See `CHANGELOG.md` for what's shipped. Upcoming: P2Pool / decentralized
+mining setup (Phase 7) — only after everything above has proven reliable.

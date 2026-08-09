@@ -1,5 +1,75 @@
 # Changelog
 
+## v0.6.0 — Safety Automation & Journal (Phase 6)
+
+Automated thermal/battery safety, real local notifications, an Experiment
+Journal, and an Analytics page. Critical thermal state always stops mining
+immediately — a hard floor that can't be disabled, matching the project's
+stance against ever bypassing thermal protection.
+
+Added:
+- `safety.py`: background `SafetyManager` (same pattern as the telemetry
+  sampler) checking real thermal/battery state every 8s. NORMAL → nothing;
+  WARM → rate-limited notification only; HOT → notification + (mining
+  only) restart at ~75% thread count; CRITICAL → notification + stop,
+  unconditionally, for mining or benchmark, regardless of the automation
+  toggle. Battery: AC-disconnect stops mining unless explicitly allowed,
+  and even then a configurable percentage floor (default 30%) still
+  applies.
+- `notifications.py`: local macOS notifications via `osascript display
+  notification`, rate-limited per notification kind (5 min cooldown) so
+  sustained WARM/HOT states can't spam the user. Never raises — a failed
+  notification never breaks anything else.
+- `mining.StopSignal` (replacing a plain `threading.Event` in the mining
+  runner): carries *why* a session stopped, so a safety-triggered stop
+  records an honest `stopped_reason` (`thermal_critical_stop`,
+  `battery_ac_disconnected`, `battery_low`, `thermal_hot_reduced`) in
+  session history instead of a generic "manual". `MiningRunner` gained
+  `stop_and_wait()` and `restart_with_threads()` to support the HOT
+  thread-reduction path.
+- `calibration.py`: extracted the Eco/Balanced/Performance recommendation
+  logic that used to live only inside the CLI's `calibrate` command, plus
+  a new `label_result()` for the Journal ("Best raw performance", "Most
+  efficient (H/s per thread)", or a neutral "Recorded" — never a
+  fabricated superlative). The CLI now calls this same shared code.
+- `analytics.py`: threads-vs-hashrate, threads-vs-efficiency, session-
+  duration-vs-hashrate, and thermal-state-vs-hashrate aggregations, each
+  requiring 2+ real data points before being marked "available". No
+  power-draw-vs-hashrate chart — power draw is a single user-entered
+  constant, not a per-run measurement, so charting it against hashrate
+  would imply a relationship that isn't actually measured.
+- REST: `/api/safety/status`, `/api/safety/settings` (GET/POST),
+  `/api/journal`, `/api/analytics`. `/ws/live` now also streams safety
+  state.
+- Frontend: `SafetyPanel` (dashboard — live thermal badge, automation
+  status, last automated action), `SafetySettingsSection` (Setup page —
+  automation toggle, allow-on-battery, battery threshold), `/journal`
+  (recommended configs + labeled experiment table), `/analytics` (real
+  scatter/bar charts via recharts, honest "not enough data yet" states).
+- 42 new backend tests (15 for safety alone, including that CRITICAL fires
+  even with automation explicitly disabled — the hard-floor guarantee) —
+  141 total, all passing.
+
+Verified manually this phase:
+- Confirmed real macOS notifications fire via `osascript` directly before
+  writing any code (automated tests mock the actual OS call so CI/repeated
+  runs don't pop up real notifications).
+- Full browser test: dashboard's Safety panel showed real live state
+  (Watching, NORMAL, Automation ON, AC-power messaging); ran a second real
+  benchmark at a different thread count and confirmed the Journal computed
+  genuinely correct recommendations (Eco found in range, Balanced
+  correctly reported "not enough data" because no tested thread count fell
+  in that range, Performance picked the actual fastest run) with accurate
+  "Best raw performance" / "Most efficient" labels; Analytics showed real
+  2-point charts for threads-vs-hashrate/efficiency while correctly
+  reporting "not enough data" for the two series that only had 1 data
+  point each. Also re-ran `./macmine calibrate` after the refactor to
+  confirm the CLI still produces identical, correct results through the
+  newly-shared `calibration.py`.
+
+Not yet built: P2Pool. That's Phase 7 — the last one, only attempted after
+everything above has proven reliable.
+
 ## v0.5.0 — First Penny & Earnings (Phase 5)
 
 Live XMR price, live Monero network stats, an earnings estimator with a

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SeedPhraseWarning } from "@/components/SeedPhraseWarning";
 import { WalletSection } from "@/components/WalletSection";
 import { PoolSection } from "@/components/PoolSection";
+import { SafetySettingsSection } from "@/components/SafetySettingsSection";
 import { api, type Pool, type Wallet } from "@/lib/api";
 
 export default function SetupPage() {
@@ -48,6 +49,7 @@ export default function SetupPage() {
 
         <WalletSection wallets={wallets} onChanged={refresh} />
         <PoolSection pools={pools} onChanged={refresh} />
+        <SafetySettingsSection />
 
         <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-4 text-sm">
           {ready ? (

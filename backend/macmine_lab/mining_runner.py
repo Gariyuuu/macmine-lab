@@ -12,7 +12,8 @@ import threading
 import time
 from dataclasses import asdict, dataclass
 
-from . import mining
+from . import db, mining
+from .mining import StopSignal
 
 
 @dataclass
@@ -48,7 +49,7 @@ class MiningRunner:
         self._connection_pool: str | None = None
         self._last_result: dict | None = None
         self._error: str | None = None
-        self._stop_event = threading.Event()
+        self._stop_event = StopSignal()
         self._thread: threading.Thread | None = None
 
     def is_running(self) -> bool:
@@ -72,7 +73,7 @@ class MiningRunner:
             self._connection_pool = None
             self._error = None
 
-        self._stop_event = threading.Event()
+        self._stop_event = StopSignal()
         self._thread = threading.Thread(target=self._run, args=(pool, wallet, threads), daemon=True)
         self._thread.start()
 
@@ -99,8 +100,39 @@ class MiningRunner:
                 self._running = False
                 self._start_monotonic = None
 
-    def stop(self) -> None:
-        self._stop_event.set()
+    def stop(self, reason: str = "manual") -> None:
+        self._stop_event.set(reason)
+
+    def stop_and_wait(self, reason: str = "manual", timeout: float = 10.0) -> bool:
+        """Used by the safety manager: blocks until the session has actually
+        finished (not just signaled), so a follow-up restart_with_threads()
+        doesn't race with the old session still shutting down."""
+        thread = self._thread
+        self.stop(reason)
+        if thread:
+            thread.join(timeout=timeout)
+        return not self.is_running()
+
+    def restart_with_threads(self, new_threads: int, reason: str) -> bool:
+        """Stops the current session (if any) and immediately starts a new
+        one against the same pool/wallet with a different thread count.
+        Used by the safety manager to back off under thermal pressure.
+        Returns False (and does nothing) if nothing was running."""
+        with self._lock:
+            if not self._running:
+                return False
+            pool_id, wallet_id = self._pool_id, self._wallet_id
+        if pool_id is None or wallet_id is None:
+            return False
+
+        pool = db.get_pool(pool_id)
+        wallet = db.get_wallet(wallet_id)
+        if not self.stop_and_wait(reason=reason):
+            return False
+        if not pool or not wallet:
+            return False
+        self.start(pool, wallet, max(1, new_threads))
+        return True
 
     def snapshot(self) -> MiningRunnerState:
         with self._lock:

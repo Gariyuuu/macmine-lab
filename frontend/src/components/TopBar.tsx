@@ -19,7 +19,7 @@ export function TopBar({
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
       <div className="flex items-center gap-3">
         <span className="text-lg font-semibold tracking-tight">MacMine Lab</span>
-        <span className="text-xs text-zinc-500">Phase 5</span>
+        <span className="text-xs text-zinc-500">Phase 6</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-6 text-sm">
@@ -45,6 +45,12 @@ export function TopBar({
           }
         />
         <nav className="flex items-center gap-4 text-xs text-zinc-500">
+          <Link href="/journal" className="hover:text-zinc-200">
+            Journal
+          </Link>
+          <Link href="/analytics" className="hover:text-zinc-200">
+            Analytics
+          </Link>
           <Link href="/earnings" className="hover:text-zinc-200">
             Earnings
           </Link>
