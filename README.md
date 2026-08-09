@@ -35,27 +35,22 @@ first few cents of real cryptocurrency.
 - ~2.3 GB free RAM available at mining time for RandomX's dataset
   (allocated once, shared across all threads).
 
-## Current status: Phase 1 of 7
+## Current status: Phase 2 of 7
 
-This repo currently implements **Phase 1** only, per the project's phased
-build plan:
+- ✅ **Phase 1** — Apple Silicon hardware detection, live telemetry, XMRig
+  install/verification via Homebrew, fully-offline duration-controlled
+  RandomX benchmarking, thread calibration, hard verified STOP.
+- ✅ **Phase 2** — local FastAPI backend (127.0.0.1 only) with SQLite
+  persistence: benchmark runs, telemetry history, and miner integrity are
+  now stored in `data/macmine.db` instead of flat JSON files. A background
+  sampler records telemetry every 8 seconds. REST endpoints for hardware,
+  live/historical telemetry, miner status/stop, and starting/reading
+  benchmarks; a `/ws/live` WebSocket pushes real telemetry + miner + active
+  benchmark state once per second for whatever frontend eventually connects.
 
-- ✅ Apple Silicon hardware detection (chip, core split, RAM, macOS version)
-- ✅ Live system telemetry (CPU, load average, memory, battery, thermal state)
-- ✅ XMRig installation via Homebrew's official `homebrew-core` formula, with
-  independent SHA-256 verification recorded locally
-- ✅ Real, fully-offline RandomX benchmarking (duration-controlled: 30s / 1min
-  / 5min) via XMRig's local HTTP API
-- ✅ Thread calibration across multiple configurations with measured (not
-  assumed) Eco/Balanced/Performance recommendations
-- ✅ A hard, verified STOP with no orphaned processes
-- ✅ Unit tests for telemetry parsing, benchmark aggregation, and the
-  STOP safety guarantee
-
-**Not yet built:** the FastAPI backend/SQLite persistence layer, the Next.js
-dashboard, real pool/wallet mining, First Penny tracking, and thermal/battery
-automation. Those are Phases 2–7. This README will be updated as each phase
-lands — see `CHANGELOG.md`.
+**Not yet built:** the Next.js dashboard, real pool/wallet mining, First
+Penny tracking, and thermal/battery automation. Those are Phases 3–7. This
+README will be updated as each phase lands — see `CHANGELOG.md`.
 
 ## Quick start
 
@@ -82,7 +77,33 @@ itself is never auto-installed), creates an isolated virtualenv at
 ./macmine calibrate             # benchmark several thread counts, recommend configs
 ./macmine status                # is a MacMine-launched xmrig running right now?
 ./macmine stop                  # hard stop — SIGTERM then SIGKILL, verified
+./macmine serve                 # run the local backend API on 127.0.0.1:8834
 ```
+
+## Local backend (Phase 2)
+
+`./macmine serve` starts a FastAPI server bound to **127.0.0.1 only** —
+nothing outside your Mac can reach it.
+
+```
+GET  /api/health
+GET  /api/hardware
+GET  /api/telemetry/live              # one real-time sample, on demand
+GET  /api/telemetry/history?minutes=  # from SQLite, sampled every 8s in the background
+GET  /api/integrity                   # latest recorded XMRig integrity check
+GET  /api/miner/status
+POST /api/miner/stop
+POST /api/benchmark/start?threads=&duration_seconds=30|60|300
+GET  /api/benchmark/live              # progress of whatever benchmark is running now
+GET  /api/benchmark/history?limit=
+GET  /api/benchmark/{id}
+WS   /ws/live                         # telemetry + miner + benchmark state, 1x/second
+```
+
+All benchmark/telemetry/integrity data now lives in `data/macmine.db`
+(SQLite) rather than the flat JSON files Phase 1 used — the CLI and the API
+server read and write the same database, so `./macmine benchmark` and
+`./macmine setup` results show up immediately through the API too.
 
 ## Benchmarking, explained
 
@@ -122,12 +143,13 @@ version — so this is auditable, not just asserted.
 
 ## Data & privacy
 
-Everything MacMine Lab writes lives under `data/` in this repo:
-`data/benchmarks/` (saved benchmark JSON), `data/logs/` (raw XMRig output),
-`data/run/` (the current PID file, if anything is running), `data/integrity/`
-(the miner integrity record). Nothing is uploaded anywhere. There is no
-authentication and no remote database because there is no remote anything —
-version 1 is entirely local.
+Everything MacMine Lab writes lives under `data/` in this repo: `data/macmine.db`
+(SQLite — benchmark runs, telemetry history, miner integrity records),
+`data/logs/` (raw XMRig output), `data/run/` (the current PID file, if
+anything is running), `data/integrity/` (a human-readable snapshot of the
+latest integrity check). Nothing is uploaded anywhere. There is no
+authentication because there is nothing to authenticate against — the API
+server only ever binds to 127.0.0.1.
 
 ## Troubleshooting
 
@@ -141,8 +163,8 @@ version 1 is entirely local.
 
 ## Roadmap
 
-See `CHANGELOG.md` for what's shipped. Upcoming, in order: local FastAPI
-backend + SQLite session history (Phase 2), the Next.js dashboard (Phase 3),
-real wallet/pool mining with accepted/rejected shares (Phase 4), First Penny
-tracking and live price/earnings estimates (Phase 5), thermal/battery
-automation and the experiment journal (Phase 6), then P2Pool (Phase 7).
+See `CHANGELOG.md` for what's shipped. Upcoming, in order: the Next.js
+dashboard (Phase 3), real wallet/pool mining with accepted/rejected shares
+(Phase 4), First Penny tracking and live price/earnings estimates (Phase 5),
+thermal/battery automation and the experiment journal (Phase 6), then
+P2Pool (Phase 7).

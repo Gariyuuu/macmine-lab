@@ -6,4 +6,8 @@ data/logs/*.log
 data/run/*.pid
 data/benchmarks/*.json
 data/integrity/*.json
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 .DS_Store

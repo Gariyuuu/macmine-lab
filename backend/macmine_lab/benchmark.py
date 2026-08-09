@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 
-from . import hardware, miner, paths
+from . import db, hardware, miner
 
 MAX_BENCH_HASHES = "10M"  # ceiling XMRig accepts; never reached in a <=5min run
 POLL_INTERVAL_S = 1.0
@@ -100,10 +100,16 @@ def _fetch_summary(port: int, token: str) -> dict | None:
         return None
 
 
-def run_benchmark(threads: int, duration_seconds: int) -> BenchmarkResult:
+def run_benchmark(threads: int, duration_seconds: int, on_sample=None) -> BenchmarkResult:
     """Run a real, offline RandomX benchmark for `duration_seconds` wall-clock
     seconds using `threads` CPU threads, then stop the miner and return
-    aggregated real results. Raises if xmrig isn't installed."""
+    aggregated real results. Raises if xmrig isn't installed.
+
+    `on_sample`, if given, is called with each HashrateSample as it's
+    collected (after RandomX dataset warmup) — this is what lets a live
+    dashboard/WebSocket show real-time progress during a run instead of
+    only seeing the final aggregate.
+    """
     port = _free_port()
     token = secrets.token_hex(16)
 
@@ -144,9 +150,10 @@ def run_benchmark(threads: int, duration_seconds: int) -> BenchmarkResult:
                     xmrig_version = summary.get("version")
                 hr = summary.get("hashrate", {}).get("total", [None, None, None])
                 if elapsed >= DATASET_WARMUP_GRACE_S:
-                    hashrate_samples.append(
-                        HashrateSample(round(elapsed, 1), hr[0], hr[1])
-                    )
+                    sample = HashrateSample(round(elapsed, 1), hr[0], hr[1])
+                    hashrate_samples.append(sample)
+                    if on_sample:
+                        on_sample(sample)
 
             if elapsed - last_telemetry_t >= TELEMETRY_SAMPLE_EVERY_S:
                 telemetry = hardware.sample_telemetry()
@@ -190,22 +197,11 @@ def run_benchmark(threads: int, duration_seconds: int) -> BenchmarkResult:
         final_thermal_state=final_thermal_state,
         stopped_reason=stopped_reason,
     )
-    _save_result(result)
+    db.init_db()
+    db.insert_benchmark_run(result)
     return result
 
 
-def _save_result(result: BenchmarkResult) -> None:
-    paths.ensure_data_dirs()
-    started = result.started_at.replace(":", "").replace("-", "")
-    out_path = paths.BENCHMARKS_DIR / f"{started}_{result.threads}t.json"
-    with open(out_path, "w") as f:
-        json.dump(asdict(result), f, indent=2)
-
-
-def list_saved_results() -> list[dict]:
-    paths.ensure_data_dirs()
-    results = []
-    for p in sorted(paths.BENCHMARKS_DIR.glob("*.json")):
-        with open(p) as f:
-            results.append(json.load(f))
-    return results
+def list_saved_results(limit: int = 50) -> list[dict]:
+    db.init_db()
+    return db.list_benchmark_runs(limit=limit)

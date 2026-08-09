@@ -189,6 +189,14 @@ def cmd_status(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    print(f"=== MacMine Lab backend — http://127.0.0.1:{args.port} (local only) ===")
+    uvicorn.run("macmine_lab.api:app", host="127.0.0.1", port=args.port, log_level="info")
+    return 0
+
+
 def cmd_stop(_args: argparse.Namespace) -> int:
     status = miner.get_status()
     if not status.running:
@@ -224,6 +232,10 @@ def build_parser() -> argparse.ArgumentParser:
     calib.add_argument("--duration", type=int, default=30, choices=[30, 60],
                         help="Duration per thread config in seconds")
     calib.set_defaults(func=cmd_calibrate)
+
+    serve = sub.add_parser("serve", help="Run the local backend API (127.0.0.1 only)")
+    serve.add_argument("--port", type=int, default=8834)
+    serve.set_defaults(func=cmd_serve)
 
     sub.add_parser("status", help="Show whether xmrig is running").set_defaults(func=cmd_status)
     sub.add_parser("stop", help="Stop any MacMine-launched xmrig process").set_defaults(

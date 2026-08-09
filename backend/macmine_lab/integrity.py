@@ -19,7 +19,7 @@ import shutil
 import subprocess
 from dataclasses import asdict, dataclass
 
-from . import paths
+from . import db, paths
 
 HOMEBREW_FORMULA_URL = (
     "https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/x/xmrig.rb"
@@ -155,6 +155,8 @@ def save_integrity_record(record: MinerIntegrity) -> None:
     paths.ensure_data_dirs()
     with open(paths.MINER_INTEGRITY_FILE, "w") as f:
         json.dump(asdict(record), f, indent=2)
+    db.init_db()
+    db.insert_miner_installation(record)
 
 
 def load_integrity_record() -> dict | None:
