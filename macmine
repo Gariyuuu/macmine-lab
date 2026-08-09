@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# MacMine Lab CLI entrypoint. Everything this launches is local and visible —
+# see README.md. Run `./setup.sh` once before using this.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PY="$SCRIPT_DIR/backend/.venv/bin/python"
+
+if [[ ! -x "$VENV_PY" ]]; then
+  echo "MacMine Lab isn't set up yet. Run ./setup.sh first." >&2
+  exit 1
+fi
+
+exec "$VENV_PY" -m macmine_lab.cli "$@"
