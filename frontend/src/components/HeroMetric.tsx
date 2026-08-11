@@ -30,8 +30,12 @@ export function HeroMetric({
   const warmingUp = (isMining || isBenchmarking) && value === null;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-10">
-      <div className="font-mono text-6xl font-semibold tracking-tight tabular-nums sm:text-7xl">
+    <div className="relative flex flex-col items-center justify-center gap-2 py-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-1/2 h-24 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/10 blur-3xl"
+      />
+      <div className="relative font-mono text-6xl font-semibold tracking-tight tabular-nums sm:text-7xl">
         {warmingUp ? (
           <span className="text-3xl text-zinc-500">
             {isMining ? "connecting to pool…" : "warming up RandomX dataset…"}
@@ -40,7 +44,10 @@ export function HeroMetric({
           formatHashrate(value)
         )}
       </div>
-      <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">{label}</div>
+      <div className="relative flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        {label}
+      </div>
 
       {isMining && mining && (
         <div className="mt-1 flex gap-4 text-sm text-zinc-400">

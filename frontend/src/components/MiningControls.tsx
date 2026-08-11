@@ -72,7 +72,7 @@ export function MiningControls({
   const notConfigured = wallets.length === 0 || pools.length === 0;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-zinc-400">Real Mining</CardTitle>
       </CardHeader>

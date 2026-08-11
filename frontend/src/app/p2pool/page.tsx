@@ -218,7 +218,7 @@ export default function P2PoolPage() {
         )}
 
         {/* Monero node */}
-        <Card className="border-white/10 bg-zinc-900/60">
+        <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-zinc-400">Monero Node (monerod)</CardTitle>
             {monerodStatus && (
@@ -301,7 +301,7 @@ export default function P2PoolPage() {
         </Card>
 
         {/* P2Pool */}
-        <Card className="border-white/10 bg-zinc-900/60">
+        <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-zinc-400">P2Pool</CardTitle>
             {p2poolStatus && (

@@ -85,7 +85,7 @@ export default function EarningsPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="border-white/10 bg-zinc-900/60">
+          <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-zinc-400">XMR Price</CardTitle>
             </CardHeader>
@@ -105,7 +105,7 @@ export default function EarningsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-white/10 bg-zinc-900/60">
+          <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-zinc-400">Network</CardTitle>
             </CardHeader>
@@ -131,7 +131,7 @@ export default function EarningsPage() {
           </Card>
         </div>
 
-        <Card className="border-white/10 bg-zinc-900/60">
+        <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-zinc-400">Your inputs</CardTitle>
           </CardHeader>
@@ -173,7 +173,7 @@ export default function EarningsPage() {
         </Card>
 
         {estimate && (
-          <Card className="border-white/10 bg-zinc-900/60">
+          <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-zinc-400">Estimate</CardTitle>
             </CardHeader>

@@ -75,13 +75,13 @@ export default function Dashboard() {
       <TopBar hardware={hardware} connection={connection} status={status} />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-8">
-        <Card className="border-white/10 bg-zinc-900/60">
+        <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
           <CardContent>
             <HeroMetric mining={mining} benchmark={benchmark} lastRun={history[0] ?? null} />
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-zinc-900/60">
+        <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-zinc-400">Live Hashrate</CardTitle>
           </CardHeader>
@@ -105,7 +105,7 @@ export default function Dashboard() {
         <LogTerminal active={status !== "IDLE"} />
 
         {history.length > 0 && (
-          <Card className="border-white/10 bg-zinc-900/60">
+          <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-zinc-400">Recent Benchmark Runs</CardTitle>
             </CardHeader>

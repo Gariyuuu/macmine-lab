@@ -82,7 +82,7 @@
     align-items: center;
     gap: 6px;
   }
-  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent); }
   .hero h1 {
     font-size: clamp(34px, 6vw, 54px);
     line-height: 1.08;
@@ -113,16 +113,31 @@
   .btn-secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); }
 
   .hero-metric {
+    position: relative;
     margin: 56px auto 0;
     max-width: 720px;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 40px;
+    box-shadow: 0 20px 48px rgba(0,0,0,0.4);
+    overflow: hidden;
   }
-  .hero-metric .value { font-family: var(--mono); font-size: 44px; font-weight: 600; }
-  .hero-metric .label { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-dimmer); margin-top: 8px; }
-  .hero-metric .sub { font-size: 12px; color: var(--text-dimmer); margin-top: 16px; font-family: var(--mono); }
+  .hero-metric::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 320px;
+    height: 140px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+    filter: blur(4px);
+    pointer-events: none;
+  }
+  .hero-metric .value { position: relative; font-family: var(--mono); font-size: 44px; font-weight: 600; }
+  .hero-metric .label { position: relative; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-dimmer); margin-top: 8px; }
+  .hero-metric .sub { position: relative; font-size: 12px; color: var(--text-dimmer); margin-top: 16px; font-family: var(--mono); }
 
   section { padding: 64px 0; border-top: 1px solid var(--border); }
   h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 12px; }
@@ -135,6 +150,7 @@
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 24px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.3);
   }
   .card h3 { margin: 0 0 14px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; }
   .card.is h3 { color: var(--accent); }
@@ -160,7 +176,10 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 18px 20px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    transition: border-color 0.15s;
   }
+  .phase:hover { border-color: var(--border-strong); }
   .phase .n { font-family: var(--mono); font-size: 11px; color: var(--accent); }
   .phase h4 { margin: 6px 0 8px; font-size: 15px; }
   .phase p { margin: 0; font-size: 13px; color: var(--text-dim); }
@@ -171,7 +190,10 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--panel-2);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    transition: border-color 0.15s;
   }
+  .principle:hover { border-color: var(--border-strong); }
   .principle .icon { font-family: var(--mono); color: var(--amber); font-size: 13px; margin-bottom: 10px; }
   .principle p { margin: 0; font-size: 13px; color: var(--text-dim); }
 

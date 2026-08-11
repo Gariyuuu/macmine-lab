@@ -42,7 +42,7 @@ export default function JournalPage() {
               <RecCard label="Best Performance Config" rec={data.recommendations.performance} />
             </div>
 
-            <Card className="border-white/10 bg-zinc-900/60">
+            <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
               <CardHeader>
                 <CardTitle className="text-sm font-medium text-zinc-400">
                   All Experiments ({data.runs.length})
@@ -92,7 +92,7 @@ export default function JournalPage() {
 
 function RecCard({ label, rec }: { label: string; rec: CalibrationRecommendation }) {
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardContent className="flex flex-col gap-1 py-4">
         <span className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</span>
         {rec.tested ? (

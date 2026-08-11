@@ -10,10 +10,21 @@ export interface ChartPoint {
 export function HashrateChart({ points }: { points: ChartPoint[] }) {
   if (points.length < 2) {
     return (
-      <div className="flex h-56 items-center justify-center text-sm text-zinc-500">
-        {points.length === 0
-          ? "No live hashrate data yet — start a benchmark to see this fill in."
-          : "Collecting samples…"}
+      <div className="flex h-32 flex-col items-center justify-center gap-3 text-center">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-zinc-700">
+          <path
+            d="M3 17 8 11l4 3 5-7 4 4"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <p className="max-w-xs text-sm text-zinc-500">
+          {points.length === 0
+            ? "No live hashrate data yet — start a benchmark to see this fill in."
+            : "Collecting samples…"}
+        </p>
       </div>
     );
   }

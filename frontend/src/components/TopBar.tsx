@@ -44,26 +44,31 @@ export function TopBar({
             connection === "open" ? "bg-emerald-400" : connection === "connecting" ? "bg-amber-400" : "bg-red-500"
           }
         />
+        <div className="h-6 w-px bg-white/10" aria-hidden />
+
         <nav className="flex items-center gap-4 text-xs text-zinc-500">
-          <Link href="/journal" className="hover:text-zinc-200">
+          <Link href="/journal" className="transition-colors hover:text-zinc-200">
             Journal
           </Link>
-          <Link href="/analytics" className="hover:text-zinc-200">
+          <Link href="/analytics" className="transition-colors hover:text-zinc-200">
             Analytics
           </Link>
-          <Link href="/p2pool" className="hover:text-zinc-200">
+          <Link href="/p2pool" className="transition-colors hover:text-zinc-200">
             P2Pool
           </Link>
-          <Link href="/changelog" className="hover:text-zinc-200">
+          <Link href="/changelog" className="transition-colors hover:text-zinc-200">
             Changelog
           </Link>
-          <Link href="/earnings" className="hover:text-zinc-200">
+          <Link href="/earnings" className="transition-colors hover:text-zinc-200">
             Earnings
           </Link>
-          <Link href="/first-penny" className="hover:text-zinc-200">
+          <Link href="/first-penny" className="transition-colors hover:text-zinc-200">
             First Penny
           </Link>
-          <Link href="/setup" className="hover:text-zinc-200">
+          <Link
+            href="/setup"
+            className="rounded-md border border-white/10 px-2.5 py-1 text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+          >
             Setup →
           </Link>
         </nav>

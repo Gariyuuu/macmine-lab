@@ -18,7 +18,7 @@ export function FirstPennyCard() {
   const unlockedCount = state?.achievements.filter((a) => a.unlocked).length ?? 0;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-medium text-zinc-400">First Penny Challenge</CardTitle>
         <Link href="/first-penny" className="text-xs text-zinc-500 hover:text-zinc-200">

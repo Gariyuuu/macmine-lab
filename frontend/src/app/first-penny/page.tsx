@@ -43,7 +43,7 @@ export default function FirstPennyPage() {
 
         {state && (
           <>
-            <Card className="border-white/10 bg-zinc-900/60">
+            <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
               <CardContent className="flex flex-col items-center gap-3 py-8">
                 <div className="font-mono text-5xl tabular-nums">
                   ${state.estimated_usd_total.toFixed(4)}
@@ -77,7 +77,7 @@ export default function FirstPennyPage() {
               />
             </div>
 
-            <Card className="border-white/10 bg-zinc-900/60">
+            <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
               <CardHeader>
                 <CardTitle className="text-sm font-medium text-zinc-400">Achievements</CardTitle>
               </CardHeader>
@@ -113,7 +113,7 @@ export default function FirstPennyPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-white/10 bg-zinc-900/60">
+            <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
               <CardHeader>
                 <CardTitle className="text-sm font-medium text-zinc-400">Milestones</CardTitle>
               </CardHeader>
@@ -153,7 +153,7 @@ export default function FirstPennyPage() {
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardContent className="flex flex-col gap-1 py-4">
         <span className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</span>
         <span className="font-mono text-lg">{value}</span>

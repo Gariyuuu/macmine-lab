@@ -51,7 +51,7 @@ export default function SetupPage() {
         <PoolSection pools={pools} onChanged={refresh} />
         <SafetySettingsSection />
 
-        <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-4 text-sm">
+        <div className="rounded-lg border border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30 p-4 text-sm">
           {ready ? (
             <p className="text-emerald-400">
               Wallet and pool configured — head to the{" "}

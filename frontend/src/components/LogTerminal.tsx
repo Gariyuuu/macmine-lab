@@ -47,7 +47,7 @@ export function LogTerminal({ active }: { active: boolean }) {
   }, [lines]);
 
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-medium text-zinc-400">Raw XMRig Log</CardTitle>
         <span className="font-mono text-[11px] text-zinc-600">{logFile ?? "no log yet"}</span>

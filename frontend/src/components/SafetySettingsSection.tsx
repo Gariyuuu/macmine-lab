@@ -39,7 +39,7 @@ export function SafetySettingsSection() {
 
   if (!settings) {
     return (
-      <Card className="border-white/10 bg-zinc-900/60">
+      <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-zinc-400">Safety</CardTitle>
         </CardHeader>
@@ -51,7 +51,7 @@ export function SafetySettingsSection() {
   }
 
   return (
-    <Card className="border-white/10 bg-zinc-900/60">
+    <Card className="border-white/[0.08] bg-zinc-900/70 shadow-xl shadow-black/30">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-zinc-400">Safety</CardTitle>
       </CardHeader>
