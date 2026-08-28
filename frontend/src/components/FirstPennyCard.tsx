@@ -35,7 +35,7 @@ export function FirstPennyCard() {
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
+                className="h-full rounded-full bg-emerald-500 transition-[width]"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>

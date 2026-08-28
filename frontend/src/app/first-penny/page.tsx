@@ -54,7 +54,7 @@ export default function FirstPennyPage() {
                 <div className="mt-2 flex w-full max-w-md items-center gap-3">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      className="h-full rounded-full bg-emerald-500 transition-[width]"
                       style={{ width: `${Math.min(state.progress_to_next_milestone * 100, 100)}%` }}
                     />
                   </div>
